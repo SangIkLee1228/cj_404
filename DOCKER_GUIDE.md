@@ -238,17 +238,17 @@ https://localhost
 
 프로젝트 최상위 폴더에서 실행합니다.
 
-| 하고 싶은 것 | 명령어 |
-| --- | --- |
-| 실행 (로그 보면서) | `docker compose up --build` |
-| 실행 (백그라운드) | `docker compose up -d --build` |
-| 실행 중인 컨테이너 목록 보기 | `docker compose ps` |
-| 로그 실시간으로 보기 (백그라운드 실행 중일 때) | `docker compose logs -f` |
-| 특정 서비스 로그만 보기 | `docker compose logs -f backend` (frontend/nginx도 가능) |
-| 끄기 | `docker compose down` |
-| 특정 서비스만 재시작 | `docker compose restart backend` |
-| 코드 안 바뀌었는데 이상할 때, 캐시 없이 완전히 새로 빌드 | `docker compose build --no-cache` |
-| 컨테이너 안에 직접 들어가보기 (디버깅용) | `docker compose exec backend sh` |
+| 하고 싶은 것                                             | 명령어                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------------- |
+| 실행 (로그 보면서)                                       | `docker compose up --build`                              |
+| 실행 (백그라운드)                                        | `docker compose up -d --build`                           |
+| 실행 중인 컨테이너 목록 보기                             | `docker compose ps`                                      |
+| 로그 실시간으로 보기 (백그라운드 실행 중일 때)           | `docker compose logs -f`                                 |
+| 특정 서비스 로그만 보기                                  | `docker compose logs -f backend` (frontend/nginx도 가능) |
+| 끄기                                                     | `docker compose down`                                    |
+| 특정 서비스만 재시작                                     | `docker compose restart backend`                         |
+| 코드 안 바뀌었는데 이상할 때, 캐시 없이 완전히 새로 빌드 | `docker compose build --no-cache`                        |
+| 컨테이너 안에 직접 들어가보기 (디버깅용)                 | `docker compose exec backend sh`                         |
 
 ---
 
