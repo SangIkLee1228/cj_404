@@ -45,6 +45,15 @@ docker compose up --build
 - 앱: http://localhost
 - API 문서(Swagger): http://localhost:8000/docs
 
+`docker-compose.override.yml`이 `docker-compose.yml`과 함께 자동으로 적용되어 로컬 소스 코드가
+컨테이너에 볼륨으로 마운트되고, 개발 서버(`npm run dev`, `uvicorn --reload`)로 실행됩니다 —
+코드를 수정하면 컨테이너 재빌드 없이 바로 반영됩니다. 프로덕션 빌드/실행 방식 그대로 띄우려면
+override를 빼고 실행하세요:
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
 ## 로컬 실행 (Docker 없이)
 
 백엔드:
@@ -72,6 +81,7 @@ Docker 없이 각각 띄울 경우 `frontend/.env.local`의 `NEXT_PUBLIC_API_URL
 ```
 .
 ├── docker-compose.yml
+├── docker-compose.override.yml # 로컬 개발용: 소스 볼륨 마운트 + 핫리로드 (자동 적용)
 ├── nginx/
 │   └── nginx.conf          # "/api/*" → backend, 나머지 → frontend
 ├── backend/                # FastAPI

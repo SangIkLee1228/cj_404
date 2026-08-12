@@ -1,0 +1,25 @@
+# Auto-loaded by `docker compose up` alongside docker-compose.yml.
+# Mounts local source into the containers and runs the dev servers (hot reload)
+# instead of the production build/start commands from the base file.
+#
+# To run the plain production build without this override:
+#   docker compose -f docker-compose.yml up --build
+
+services:
+  frontend:
+    build:
+      target: deps # stop before the production build; deps stage already has node_modules
+    command: npm run dev
+    environment:
+      - WATCHPACK_POLLING=true # bind-mounted source on Windows doesn't emit native fs change events
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # keep the image's node_modules, don't let the bind mount hide it
+      - /app/.next
+    ports:
+      - "3000:3000" # optional direct access to the Next.js dev server
+
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
