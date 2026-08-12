@@ -8,7 +8,6 @@
 frontend/node_modules/
 frontend/.next/
 frontend/out/
-frontend/next-env.d.ts
 frontend/npm-debug.log*
 
 # Python / FastAPI

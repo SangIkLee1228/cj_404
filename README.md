@@ -11,7 +11,7 @@
 | 영역          | 기술                                                                                     |
 | ------------- | ---------------------------------------------------------------------------------------- |
 | 리버스 프록시 | Nginx                                                                                    |
-| 프론트엔드    | Next.js (React) + TailwindCSS                                                            |
+| 프론트엔드    | Next.js (React, JSX) + TailwindCSS + Zustand (상태관리)                                  |
 | 백엔드        | Python FastAPI (RESTful API)                                                             |
 | DB            | Supabase (PostgreSQL)                                                                    |
 | 파일 저장소   | Supabase Storage (이미지)                                                                |
@@ -112,12 +112,14 @@ Docker 없이 각각 띄울 경우 `frontend/.env.local`의 `NEXT_PUBLIC_API_URL
 │       ├── main.py
 │       ├── core/           # 설정, Supabase 클라이언트, Auth 검증
 │       └── api/routes/     # health, me(인증 예시), storage(이미지 업로드 예시)
-└── frontend/                # Next.js + Tailwind
+└── frontend/                # Next.js(JSX) + Tailwind + Zustand
     └── src/
         ├── app/             # App Router 페이지 (/, /login, /dashboard)
+        ├── components/      # supabase-auth-listener.jsx (zustand 스토어 동기화)
+        ├── store/           # useAuthStore.js (zustand)
         ├── lib/supabase/    # 브라우저/서버 Supabase 클라이언트
-        ├── lib/api.ts       # 백엔드 호출 헬퍼(토큰 자동 첨부)
-        └── middleware.ts    # 세션 갱신 + /dashboard 보호
+        ├── lib/api.js       # 백엔드 호출 헬퍼(토큰 자동 첨부)
+        └── middleware.js    # 세션 갱신 + /dashboard 보호
 ```
 
 ## 현재 범위
