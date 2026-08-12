@@ -6,7 +6,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-app = FastAPI(title="Vehicle Damage Manager API")
+app = FastAPI(title="CJ-X-Vision API")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,4 +1,4 @@
-# vehicle-damage-manager
+# cj-x-vision
 
 차량 / 파손이력 / 사용자 관리 시스템 보일러플레이트.
 
