@@ -16,7 +16,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-https://localhost}
     ports:
       - "8000:8000" # direct access for /docs (Swagger UI); remove in production
     expose:
@@ -24,11 +24,14 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: ./nginx
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs # self-signed cert, generated on first start, persists per machine
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       - frontend
       - backend

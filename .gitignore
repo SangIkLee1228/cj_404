@@ -18,6 +18,9 @@ backend/.venv/
 backend/*.egg-info/
 backend/.pytest_cache/
 
+# TLS certs (self-signed, generated per machine - see nginx/generate-cert.sh)
+nginx/certs/
+
 # OS / editor
 .DS_Store
 Thumbs.db
