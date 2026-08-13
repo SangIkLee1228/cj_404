@@ -13,7 +13,7 @@ services:
     environment:
       - WATCHPACK_POLLING=true # bind-mounted source on Windows doesn't emit native fs change events
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app          # 본인 디렉토리 경로 : docker 내부 경로
       - /app/node_modules # keep the image's node_modules, don't let the bind mount hide it
       - /app/.next
     ports:
