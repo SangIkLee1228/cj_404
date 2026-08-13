@@ -33,7 +33,7 @@ Supabase는 클라우드에 이미 생성된 프로젝트에 연결하는 방식
 
 ## 사전 준비
 
-1. [supabase.com](https://supabase.com)에서 프로젝트를 하나 생성합니다.
+1. [supabase.com](https://supabase.com)에서 프로젝트를 하나 생성합니다. ( 팀장이 공용으로 준비)
 2. Project Settings → API에서 다음 값을 확인합니다: Project URL, `anon` public key, `service_role` key, JWT Secret.
 3. Storage에서 이미지 업로드용 버킷을 하나 만듭니다 (기본값: `images`).
 
