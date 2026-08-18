@@ -19,6 +19,10 @@ backend/.pytest_cache/
 
 # TLS certs (self-signed, generated per machine - see nginx/generate-cert.sh)
 nginx/certs/
+*.key
+*.cert
+*.pem
+.env
 
 # OS / editor
 .DS_Store

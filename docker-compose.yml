@@ -2,6 +2,9 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        # NEXT_PUBLIC_* 는 빌드 시점에 코드에 박히므로 build args 로도 넘겨야 함
+        - NEXT_PUBLIC_API_URL=/api
     env_file:
       - ./frontend/.env.local
     environment:
@@ -19,8 +22,6 @@ services:
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-https://localhost}
     ports:
       - "8000:8000" # direct access for /docs (Swagger UI); remove in production
-    expose:
-      - "8000"
     restart: unless-stopped
 
   nginx:
