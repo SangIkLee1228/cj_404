@@ -16,6 +16,7 @@ backend/**/__pycache__/
 backend/.venv/
 backend/*.egg-info/
 backend/.pytest_cache/
+backend/.ruff_cache/
 
 # TLS certs (self-signed, generated per machine - see nginx/generate-cert.sh)
 nginx/certs/

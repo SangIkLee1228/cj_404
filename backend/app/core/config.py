@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     frontend_origin: str = "http://localhost"
 
+    environment: str = "development"
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:

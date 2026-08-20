@@ -21,7 +21,7 @@ services:
     environment:
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-https://localhost}
     ports:
-      - "8000:8000" # direct access for /docs (Swagger UI); remove in production
+      - "8000:8000" # direct access for /api/docs (Swagger UI); remove in production
     restart: unless-stopped
 
   nginx:

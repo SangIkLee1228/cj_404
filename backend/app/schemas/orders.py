@@ -1,0 +1,53 @@
+from datetime import datetime
+from decimal import Decimal
+
+from pydantic import BaseModel
+
+from app.schemas.codes import OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
+
+
+class Order(BaseModel):
+    """ORDERS 행 (테이블명 예약어 회피). 결제 시점의 멤버십 등급을 applied_grade_id로 스냅샷한다."""
+
+    order_id: int
+    store_id: int
+    scan_session_id: int | None = None
+    staff_id: int
+    member_id: int | None = None
+    applied_grade_id: int | None = None
+    status: OrderStatus = "PENDING"
+    payment_method: PaymentMethod | None = None
+    total_amount: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+    membership_discount_amount: Decimal = Decimal("0")
+    manual_discount_amount: Decimal = Decimal("0")
+    manual_discount_reason: str | None = None
+    manual_discount_staff_id: int | None = None
+    point_used: int = 0
+    point_earned: int = 0
+    ordered_at: datetime
+    paid_at: datetime | None = None
+
+
+class OrderItem(BaseModel):
+    """unit_price는 PRODUCT.price와 별도로 결제 시점 스냅샷을 저장한다(가격 이력 보존)."""
+
+    order_item_id: int
+    order_id: int
+    product_id: int
+    quantity: int = 1
+    unit_price: Decimal
+    subtotal: Decimal
+    source_type: OrderItemSourceType
+
+
+class PointTransaction(BaseModel):
+    point_txn_id: int
+    member_id: int
+    order_id: int
+    applied_grade_id: int | None = None
+    txn_type: PointTxnType
+    point_amount: int
+    point_rate: Decimal | None = None
+    balance_after: int
+    created_at: datetime
