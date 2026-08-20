@@ -2,6 +2,12 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+environment: str = "development"
+log_level: str = "INFO"
+
+# 로그인 화면(S-00) 미구현 MVP용. true면 JWT 검증을 건너뛴다.
+auth_disabled: bool = False
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
