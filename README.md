@@ -1,4 +1,4 @@
-# 스냅빵 (SnapBbang) / 브레드아이 (BreadEye)
+# 스냅빵 (SnapBbang)
 
 CJ푸드빌 뚜레쥬르 — 'Vision AI 기반 빵 인식·계산·재고 운영 최적화 시스템' 보일러플레이트.
 현재는 Next.js + FastAPI + Supabase 보일러플레이트 단계입니다.
