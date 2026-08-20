@@ -6,7 +6,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-app = FastAPI(title="CJ-X-Vision API")
+app = FastAPI(title="SnapBbang API")
 
 app.add_middleware(
     CORSMiddleware,

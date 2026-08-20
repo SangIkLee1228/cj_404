@@ -14,8 +14,9 @@ async def upload_image(file: UploadFile, user: CurrentUser = Depends(get_current
     """Example: upload an image to Supabase Storage and return its path.
 
     Boilerplate only - callers are expected to persist the returned `path`
-    against their own domain rows (e.g. a damage-history record) and re-sign
-    a fresh URL at read time rather than storing a long-lived public URL.
+    against their own domain rows (e.g. a scan-session or product-image record)
+    and re-sign a fresh URL at read time rather than storing a long-lived
+    public URL.
     """
     settings = get_settings()
     supabase = get_supabase()
