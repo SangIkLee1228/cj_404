@@ -5,3 +5,5 @@ import os
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret")
+# 앱은 AUTH_DISABLED=true로 돌지만(.env), JWT 배선 자체는 계속 검증한다.
+os.environ.setdefault("AUTH_DISABLED", "false")

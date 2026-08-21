@@ -18,7 +18,7 @@ logger = structlog.get_logger("app.request")
 app = FastAPI(
     title="SnapBbang API",
     description=(
-        "스냅빵(SnapBbang) / 브레드아이(BreadEye) - 뚜레쥬르 Vision AI 기반 빵 인식·계산·"
+        "스냅빵(SnapBbang) - 뚜레쥬르 Vision AI 기반 빵 인식·계산·"
         "재고 운영 최적화 시스템 백엔드 API (학습/제안용 프로젝트, 실제 CJ푸드빌 운영 서비스 아님)"
     ),
     version="0.1.0",
@@ -27,13 +27,18 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+
+    # 밑에 Swagger (/docs) 주석을 직접 달 수 있습니다!
     openapi_tags=[
-        {"name": "health", "description": "인프라 헬스체크 (Docker/모니터링 전용, nginx 미경유)"},
+        {"name": "health",
+            "description": "인프라 헬스체크 (Docker/모니터링 전용, nginx 미경유)"},
         {"name": "auth", "description": "Supabase Auth로 발급된 JWT 검증 예시"},
         {"name": "storage", "description": "Supabase Storage 이미지 업로드 / 서명 URL 예시"},
         {"name": "products", "description": "상품(빵) 마스터 관리 (FR-16)"},
-        {"name": "scan", "description": "트레이 스캔 · AI 인식 연동 지점 (FR-01/02, 추론은 stub)"},
-        {"name": "inventory", "description": "재고 대시보드 (FR-13, 참고 정보 - 자동 발주 아님)"},
+        {"name": "scan",
+            "description": "트레이 스캔 · AI 인식 연동 지점 (FR-01/02, 추론은 stub)"},
+        {"name": "inventory",
+            "description": "재고 대시보드 (FR-13, 참고 정보 - 자동 발주 아님)"},
         {"name": "notifications", "description": "매진 임박 수량 알림 (FR-15)"},
     ],
 )
@@ -75,4 +80,5 @@ app.include_router(health.router)
 # 공개 REST API
 app.include_router(api_router)
 
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+Instrumentator().instrument(app).expose(
+    app, endpoint="/metrics", include_in_schema=False)
