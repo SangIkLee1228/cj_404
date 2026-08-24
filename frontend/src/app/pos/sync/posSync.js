@@ -10,7 +10,10 @@
  * 나중에 실제 API로 교체할 때는 이 파일의 구현만 바꾸면 된다
  * (읽기/구독/커밋의 함수 시그니처는 유지).
  */
-import { ALL_PRODUCTS, MOCK_INVENTORY_BY_NAME } from '../mock-data/mockProducts';
+import {
+  ALL_PRODUCTS,
+  MOCK_INVENTORY_BY_NAME,
+} from '../mock-data/mockProducts';
 
 export const SNAP_SYNC_KEY = 'snapbbang_store_v14';
 export const SNAP_EVENT_KEY = 'snapbbang_event_v14';
@@ -36,7 +39,10 @@ function makeSeedState() {
   const inventory = {};
   products.forEach((p) => {
     const defaultQty = p.productType === 'BREAD' ? 30 : 24;
-    const initialQty = p.name in MOCK_INVENTORY_BY_NAME ? MOCK_INVENTORY_BY_NAME[p.name] : defaultQty;
+    const initialQty =
+      p.name in MOCK_INVENTORY_BY_NAME
+        ? MOCK_INVENTORY_BY_NAME[p.name]
+        : defaultQty;
     inventory[p.productId] = {
       productId: p.productId,
       producedQty: initialQty,
@@ -47,7 +53,11 @@ function makeSeedState() {
   });
   return {
     version: '1.3',
-    store: { storeId: STORE_ID, storeCode: 'TLJ-DEMO-01', storeName: '뚜레쥬르 스냅빵 데모매장' },
+    store: {
+      storeId: STORE_ID,
+      storeCode: 'TLJ-DEMO-01',
+      storeName: '뚜레쥬르 스냅빵 데모매장',
+    },
     products,
     inventory,
     orders: [],
@@ -133,9 +143,19 @@ export function applyOrderToState(state, order) {
   return state;
 }
 
-export function buildPaidOrder({ cartItems, member, points, hasCaptured, correctionCount, scanStartedAt }) {
+export function buildPaidOrder({
+  cartItems,
+  member,
+  points,
+  hasCaptured,
+  correctionCount,
+  scanStartedAt,
+}) {
   const now = new Date();
-  const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const totalAmount = cartItems.reduce(
+    (sum, item) => sum + item.price * item.qty,
+    0
+  );
   const itemCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
   return {
     orderId: `ORD-${now.getTime()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
@@ -161,7 +181,12 @@ export function buildPaidOrder({ cartItems, member, points, hasCaptured, correct
       quantity: item.qty,
       unitPrice: item.price,
       subtotal: item.price * item.qty,
-      sourceType: item.source === 'ai' ? 'AI_DETECTED' : item.source === 'mixed' ? 'STAFF_CORRECTED' : 'MANUAL_ADD',
+      sourceType:
+        item.source === 'ai'
+          ? 'AI_DETECTED'
+          : item.source === 'mixed'
+            ? 'STAFF_CORRECTED'
+            : 'MANUAL_ADD',
     })),
   };
 }
@@ -195,12 +220,16 @@ export function emitSync(payload) {
     channel?.close();
   }
   try {
-    window.localStorage.setItem(SNAP_EVENT_KEY, JSON.stringify({ ...msg, nonce: Date.now() }));
+    window.localStorage.setItem(
+      SNAP_EVENT_KEY,
+      JSON.stringify({ ...msg, nonce: Date.now() })
+    );
   } catch {
     // 이벤트 브로드캐스트 실패는 무시 — 로컬 POS 동작에는 영향 없다.
   }
   try {
-    if (window.opener && !window.opener.closed) window.opener.postMessage(msg, '*');
+    if (window.opener && !window.opener.closed)
+      window.opener.postMessage(msg, '*');
   } catch {
     // opener 접근 불가(다른 origin 등)는 무시.
   }
@@ -267,7 +296,9 @@ export function resolveRemaining(managerState, fallbackOverrides, name) {
   const fromManager = remainingFromManagerState(managerState, name);
   if (fromManager !== null) return fromManager;
   if (name in MOCK_INVENTORY_BY_NAME) {
-    return name in fallbackOverrides ? fallbackOverrides[name] : MOCK_INVENTORY_BY_NAME[name];
+    return name in fallbackOverrides
+      ? fallbackOverrides[name]
+      : MOCK_INVENTORY_BY_NAME[name];
   }
   return Infinity;
 }

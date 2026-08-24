@@ -5,7 +5,13 @@ import styles from '../../pos.module.css';
  * design/foundation.md · design/pos.md 규칙: 결과를 구체적으로 명시하고,
  * 확인 버튼에 "예/아니오" 대신 실행 결과를 그대로 라벨로 쓴다.
  */
-export default function ConfirmModal({ title, description, confirmLabel, onConfirm, onCancel }) {
+export default function ConfirmModal({
+  title,
+  description,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}) {
   return (
     <div
       style={{

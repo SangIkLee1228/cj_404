@@ -20,9 +20,24 @@ const rawBreadCatalog = [
   { name: '소보로빵', price: 2500, category: '간식빵', emoji: '🥯' },
   { name: '크림치즈 베이글', price: 3600, category: '간식빵', emoji: '🥯' },
   { name: '모카번', price: 3000, category: '간식빵', emoji: '🥯' },
-  { name: '초코 크루아상', price: 3500, category: '파이/페이스트리', emoji: '🥐' },
-  { name: '버터 크루아상', price: 3200, category: '파이/페이스트리', emoji: '🥐' },
-  { name: '딸기 데니쉬', price: 3900, category: '파이/페이스트리', emoji: '🥧' },
+  {
+    name: '초코 크루아상',
+    price: 3500,
+    category: '파이/페이스트리',
+    emoji: '🥐',
+  },
+  {
+    name: '버터 크루아상',
+    price: 3200,
+    category: '파이/페이스트리',
+    emoji: '🥐',
+  },
+  {
+    name: '딸기 데니쉬',
+    price: 3900,
+    category: '파이/페이스트리',
+    emoji: '🥧',
+  },
   { name: '애플파이', price: 3600, category: '파이/페이스트리', emoji: '🥧' },
   { name: '초코 스콘', price: 2800, category: '파이/페이스트리', emoji: '🧁' },
   { name: '에그타르트', price: 2800, category: '파이/페이스트리', emoji: '🥧' },
@@ -63,8 +78,21 @@ export const BREAD_CATALOG = withIds(rawBreadCatalog, 'B', 'BREAD');
 export const DRINK_CATALOG = withIds(rawDrinkCatalog, 'D', 'DRINK');
 export const ALL_PRODUCTS = [...BREAD_CATALOG, ...DRINK_CATALOG];
 
-export const BREAD_CATEGORIES = ['전체', '식빵', '건강빵', '간식빵', '파이/페이스트리', '도넛/고로케'];
-export const DRINK_CATEGORIES = ['전체', '커피', '티', '에이드/주스', '우유/기타'];
+export const BREAD_CATEGORIES = [
+  '전체',
+  '식빵',
+  '건강빵',
+  '간식빵',
+  '파이/페이스트리',
+  '도넛/고로케',
+];
+export const DRINK_CATEGORIES = [
+  '전체',
+  '커피',
+  '티',
+  '에이드/주스',
+  '우유/기타',
+];
 
 export function findProductByName(name) {
   return ALL_PRODUCTS.find((p) => p.name === name) || null;
@@ -97,7 +125,13 @@ export const MOCK_SOLD_TODAY_BY_NAME = {
 
 /** 기본 촬영 AI 인식 Mock 결과 */
 export const MOCK_BASIC_CAPTURE = [
-  { name: '카망베르 치즈빵', price: 3200, qty: 1, confidence: 98, source: 'ai' },
+  {
+    name: '카망베르 치즈빵',
+    price: 3200,
+    qty: 1,
+    confidence: 98,
+    source: 'ai',
+  },
   { name: '소금빵', price: 2200, qty: 2, confidence: 96, source: 'ai' },
   { name: '초코 크루아상', price: 3500, qty: 1, confidence: 94, source: 'ai' },
 ];
@@ -110,9 +144,21 @@ export const MOCK_ADD_CAPTURE = [
 
 /** 다시 촬영 AI 인식 Mock 결과 — 기존 AI 인식 결과를 이 결과로 교체한다(직접 추가 항목은 유지). */
 export const MOCK_RETAKE_CAPTURE = [
-  { name: '카망베르 치즈빵', price: 3200, qty: 1, confidence: 99, source: 'ai' },
+  {
+    name: '카망베르 치즈빵',
+    price: 3200,
+    qty: 1,
+    confidence: 99,
+    source: 'ai',
+  },
   { name: '소금빵', price: 2200, qty: 1, confidence: 98, source: 'ai' },
-  { name: '크림치즈 베이글', price: 3600, qty: 1, confidence: 95, source: 'ai' },
+  {
+    name: '크림치즈 베이글',
+    price: 3600,
+    qty: 1,
+    confidence: 95,
+    source: 'ai',
+  },
 ];
 
 /**
@@ -121,6 +167,11 @@ export const MOCK_RETAKE_CAPTURE = [
  */
 export const MOCK_BBOX_SLOTS = [
   { left: '7.5%', top: 'calc(52% - 53px)', width: '188px', height: '106px' },
-  { left: 'calc(50% - 90px)', top: 'calc(52% - 51px)', width: '180px', height: '102px' },
+  {
+    left: 'calc(50% - 90px)',
+    top: 'calc(52% - 51px)',
+    width: '180px',
+    height: '102px',
+  },
   { right: '7.5%', top: 'calc(52% - 54px)', width: '194px', height: '108px' },
 ];

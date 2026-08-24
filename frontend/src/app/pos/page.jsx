@@ -29,7 +29,11 @@ export default function PosPage() {
       <TopBar totalAmount={pos.totalAmount} />
 
       {pos.state.capture.screen === 'recognition' ? (
-        <RecognitionScreen pos={pos} onRequestRetake={requestRetake} onRequestCancel={requestCancel} />
+        <RecognitionScreen
+          pos={pos}
+          onRequestRetake={requestRetake}
+          onRequestCancel={requestCancel}
+        />
       ) : (
         <CaptureScreen
           mode={pos.state.capture.mode}
