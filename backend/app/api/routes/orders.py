@@ -53,3 +53,16 @@ def _shape(row: dict) -> dict:
         "items": [],
         "ordered_at": row["ordered_at"],
     }
+
+
+@router.get("")
+def get_orders():
+    '''
+    GET
+    /api/orders
+    판매 내역 목록
+    (FR-17)
+    '''
+    return {
+
+    }
