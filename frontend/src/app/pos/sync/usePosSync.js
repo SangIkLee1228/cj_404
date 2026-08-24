@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { commitPaidOrder, emitSync, getOrSeedSharedState, subscribeManagerState } from './posSync';
+import {
+  commitPaidOrder,
+  emitSync,
+  getOrSeedSharedState,
+  subscribeManagerState,
+} from './posSync';
 
 /**
  * POS ↔ 점장 대시보드 연동을 React 생명주기에 묶는 얇은 레이어.

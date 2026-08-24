@@ -21,17 +21,24 @@ export default function ProductCatalog({
   const baseCatalog = isDrink ? DRINK_CATALOG : BREAD_CATALOG;
   const catalog = mergeCatalogWithManagerState(baseCatalog, managerState);
   const categories = isDrink ? DRINK_CATEGORIES : BREAD_CATEGORIES;
-  const items = category === '전체' ? catalog : catalog.filter((p) => p.category === category);
+  const items =
+    category === '전체'
+      ? catalog
+      : catalog.filter((p) => p.category === category);
 
   return (
     <>
-      <div className={styles.rightTitle}>빵·음료 메뉴를 선택해 현재 계산에 직접 추가할 수 있어요</div>
+      <div className={styles.rightTitle}>
+        빵·음료 메뉴를 선택해 현재 계산에 직접 추가할 수 있어요
+      </div>
       <div className={styles.catalogShell}>
         <section className={styles.catalogMain}>
           <div className={styles.catalogHead}>
             <div className={styles.catalogTitleWrap}>
               <b>{isDrink ? '음료 상품' : '빵 상품'}</b>
-              <span className={styles.catalogHelp}>상품 사진을 눌러 계산에 추가</span>
+              <span className={styles.catalogHelp}>
+                상품 사진을 눌러 계산에 추가
+              </span>
             </div>
             <div className={styles.manualTools} aria-label="상품 종류 선택">
               <button
@@ -51,7 +58,9 @@ export default function ProductCatalog({
             </div>
           </div>
           <nav className={styles.catalogRail} aria-label="상품 카테고리">
-            <div className={styles.catalogBrand}>{isDrink ? 'DRINK' : 'BREAD'}</div>
+            <div className={styles.catalogBrand}>
+              {isDrink ? 'DRINK' : 'BREAD'}
+            </div>
             {categories.map((c) => (
               <button
                 key={c}
@@ -77,7 +86,10 @@ export default function ProductCatalog({
           </div>
         </section>
       </div>
-      <div className={styles.rightNote}>※ 직접 추가 상품도 결제 완료 시 판매·재고 반영 흐름에 동일하게 포함됩니다.</div>
+      <div className={styles.rightNote}>
+        ※ 직접 추가 상품도 결제 완료 시 판매·재고 반영 흐름에 동일하게
+        포함됩니다.
+      </div>
     </>
   );
 }

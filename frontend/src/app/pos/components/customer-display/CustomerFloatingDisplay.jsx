@@ -12,7 +12,16 @@ const FRAME_HEIGHT = 624;
  * Pointer Capture를 헤더 요소 자체에 거는 방식이라 document 레벨 리스너를 추가/해제할 필요가 없다.
  */
 export default function CustomerFloatingDisplay({ pos }) {
-  const { state, activeCart, totalCount, totalAmount, points, popularTop3, customerViewState, memberName } = pos;
+  const {
+    state,
+    activeCart,
+    totalCount,
+    totalAmount,
+    points,
+    popularTop3,
+    customerViewState,
+    memberName,
+  } = pos;
   const { membership, payment } = state;
   const greeting = customerViewState === 'greeting';
   const visibleItems = activeCart.slice(0, 4);
@@ -24,13 +33,19 @@ export default function CustomerFloatingDisplay({ pos }) {
   const clampToViewport = (left, top) => {
     const maxLeft = Math.max(0, window.innerWidth - FRAME_WIDTH);
     const maxTop = Math.max(0, window.innerHeight - FRAME_HEIGHT);
-    return { left: Math.min(Math.max(0, left), maxLeft), top: Math.min(Math.max(0, top), maxTop) };
+    return {
+      left: Math.min(Math.max(0, left), maxLeft),
+      top: Math.min(Math.max(0, top), maxTop),
+    };
   };
 
   const handleHeaderPointerDown = (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const rect = containerRef.current.getBoundingClientRect();
-    dragRef.current = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    dragRef.current = {
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const handleHeaderPointerMove = (e) => {
@@ -78,7 +93,9 @@ export default function CustomerFloatingDisplay({ pos }) {
       </div>
 
       {greeting ? (
-        <div className={`${styles.customerBody} ${styles.customerGreeting} ${styles.show}`}>
+        <div
+          className={`${styles.customerBody} ${styles.customerGreeting} ${styles.show}`}
+        >
           <div className={styles.greetingBrand}>
             <div className={styles.tljLogo}>
               TOUS <small>les</small> JOURS
@@ -139,7 +156,9 @@ export default function CustomerFloatingDisplay({ pos }) {
               {visibleItems.map((item) => (
                 <div className={styles.customerItem} key={item.name}>
                   <div className={styles.customerItemMain}>
-                    <span className={styles.customerThumb}>{item.emoji || '🥐'}</span>
+                    <span className={styles.customerThumb}>
+                      {item.emoji || '🥐'}
+                    </span>
                     <b>
                       {item.name} × {item.qty}
                     </b>
@@ -148,7 +167,9 @@ export default function CustomerFloatingDisplay({ pos }) {
                 </div>
               ))}
               {activeCart.length > 4 && (
-                <div className={styles.customerMore}>외 {activeCart.length - 4}개 품목</div>
+                <div className={styles.customerMore}>
+                  외 {activeCart.length - 4}개 품목
+                </div>
               )}
             </div>
           </div>
@@ -168,14 +189,18 @@ export default function CustomerFloatingDisplay({ pos }) {
               <b>CJ ONE 멤버십</b>
               <small>휴대폰 번호로 간편 적립</small>
             </div>
-            <div className={`${styles.customerMemberInfo} ${membership.memberConfirmed ? styles.show : ''}`}>
+            <div
+              className={`${styles.customerMemberInfo} ${membership.memberConfirmed ? styles.show : ''}`}
+            >
               {membership.memberConfirmed
                 ? `${maskMemberName(memberName)} · ${payment.paid ? `${points}P 적립 완료` : `적립 예정 ${points}P`}`
                 : ''}
             </div>
           </div>
 
-          <div className={`${styles.customerPopular} ${activeCart.length > 0 && !payment.paid ? styles.show : ''}`}>
+          <div
+            className={`${styles.customerPopular} ${activeCart.length > 0 && !payment.paid ? styles.show : ''}`}
+          >
             <div className={styles.popularHead}>
               <b>오늘의 인기 상품 TOP3</b>
               <span>재고·판매 데이터 기준</span>

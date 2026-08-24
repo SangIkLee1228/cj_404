@@ -12,7 +12,9 @@ export default function MembershipPanel({
 }) {
   return (
     <>
-      <div className={`${styles.statusStrip} ${memberConfirmed ? styles.show : ''}`}>
+      <div
+        className={`${styles.statusStrip} ${memberConfirmed ? styles.show : ''}`}
+      >
         <span>
           회원 확인 · {maskMemberName(memberName)} · 적립 예정 {points}P
         </span>
