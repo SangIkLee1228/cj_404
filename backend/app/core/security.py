@@ -29,7 +29,7 @@ def get_current_user(
 
     if credentials is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED,
-                            "Missing bearer token")
+                            "로그인이 필요합니다.")
 
     try:
         claims = jwt.decode(
@@ -40,6 +40,6 @@ def get_current_user(
         )
     except jwt.PyJWTError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED,
-                            "Invalid or expired token") from exc
+                            "로그인이 만료되었습니다. 다시 로그인해 주세요.") from exc
 
     return CurrentUser(id=claims["sub"], email=claims.get("email"), claims=claims)

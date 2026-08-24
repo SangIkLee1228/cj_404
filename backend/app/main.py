@@ -9,6 +9,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.router import api_router
 from app.api.routes import health
 from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 
 configure_logging()
@@ -57,6 +58,8 @@ async def log_requests(request: Request, call_next):
     structlog.contextvars.clear_contextvars()
     trace_id = request.headers.get("x-request-id", str(uuid.uuid4()))
     structlog.contextvars.bind_contextvars(trace_id=trace_id)
+    # 예외 핸들러가 error.trace_id 로 쓸 수 있게 요청에 실어둔다(API명세서 1.4).
+    request.state.trace_id = trace_id
 
     start = time.perf_counter()
     response = await call_next(request)
@@ -72,6 +75,9 @@ async def log_requests(request: Request, call_next):
     response.headers["X-Request-ID"] = trace_id
     return response
 
+
+# 모든 오류를 { "error": { code, message, details, trace_id } } 형태로 통일 (API명세서 1.4)
+register_exception_handlers(app)
 
 # 인프라 전용 엔드포인트 - "/api" prefix 밖에 두어 nginx를 거치지 않고
 # Docker 헬스체크/Prometheus가 내부망에서 직접 호출하게 한다.
