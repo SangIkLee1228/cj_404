@@ -1,0 +1,20 @@
+# GPU 인스턴스에서 학습/추론용 backend를 띄울 때 docker-compose.yml 위에 얹는 오버레이.
+# 사전 조건: 호스트에 NVIDIA 드라이버 + NVIDIA Container Toolkit 설치 필요
+# (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+#
+# 사용:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+# (docker-compose.override.yml은 로컬 개발용이므로 이 조합에는 자동 포함되지 않음)
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

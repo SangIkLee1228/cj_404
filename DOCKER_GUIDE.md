@@ -1,6 +1,6 @@
-# cj-x-vision Docker 환경 구축 가이드
+# 스냅빵(SnapBbang) Docker 환경 구축 가이드
 
-이 문서는 Docker를 처음 써보는 팀원도 그대로 따라 하면 `cj-x-vision`을 자신의 컴퓨터에서
+이 문서는 Docker를 처음 써보는 팀원도 그대로 따라 하면 `스냅빵(SnapBbang)`을 자신의 컴퓨터에서
 `https://localhost`로 띄울 수 있도록 처음부터 끝까지 순서대로 설명합니다. 막히는 부분이 있으면
 건너뛰지 말고 팀 채널에 물어보세요 — 대부분 다른 팀원도 같은 곳에서 막힙니다.
 
@@ -94,12 +94,12 @@ Docker Desktop이 아직 실행 중이 아니거나 설치가 덜 된 것이니 
 팀에서 안내받은 방식대로 저장소를 클론합니다 (예: GitHub 원격 저장소가 있다면).
 
 ```bash
-git clone <저장소 URL> cj-x-vision
-cd cj-x-vision
+git clone <저장소 URL> snapbbang
+cd snapbbang
 ```
 
 이미 파일을 다른 방식(zip 등)으로 받았다면 해당 폴더로 이동만 하면 됩니다. 이후 모든 명령어는
-**이 프로젝트 최상위 폴더(`cj-x-vision`, `docker-compose.yml`이 있는 위치)에서** 실행한다고
+**이 프로젝트 최상위 폴더(`snapbbang`, `docker-compose.yml`이 있는 위치)에서** 실행한다고
 가정합니다.
 
 ---
