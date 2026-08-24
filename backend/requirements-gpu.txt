@@ -1,0 +1,15 @@
+# GPU 인스턴스(학습/추론 전용 서버)에만 설치하는 추가 의존성.
+# 일반 API 컨테이너(backend/Dockerfile)에는 포함하지 않는다 - torch 등은 용량이 크고
+# CUDA 버전에 따라 wheel이 다르기 때문.
+#
+# torch/torchvision은 인스턴스의 CUDA 드라이버 버전에 맞춰 설치해야 하므로, 아래처럼
+# 버전만 pip install 하지 말고 https://pytorch.org/get-started/locally/ 에서 안내하는
+# --index-url 명령을 그대로 사용할 것. 예 (CUDA 12.4):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+-r requirements.txt
+
+torch>=2.5
+torchvision>=0.20
+numpy>=1.26
+pillow>=10.4
+opencv-python-headless>=4.10
