@@ -128,45 +128,45 @@ point_earned               = floor(total_amount × grade.point_earn_rate)   // �
 
 `구현`: ✅ 완료 / 🟡 스펙 불일치 / ❌ 미구현 (2026-08-21 `cj_404/backend` 기준)
 
-| 그룹 | 메서드 | 경로 | 설명 | FR | 구현 |
-|---|---|---|---|---|---|
-| 시스템 | GET | `/health` | 서버 생존 (nginx 밖) | | ✅ |
-| | GET | `/health/ready` | DB 연결 포함 준비 상태 | | ❌ |
-| | GET | `/api/me` | 현재 직원 정보 | | 🟡 |
-| 상품 | GET | `/api/products` | 상품 목록 | FR-16 | 🟡 |
-| | GET | `/api/products/{product_id}` | 상품 단건 | FR-16 | ❌ |
-| | GET | `/api/products/recommendations` | **메뉴 추천 TOP 3** | FR-11 | ❌ |
-| | POST | `/api/products` | 상품 등록 | FR-16 | 🟡 |
-| | PATCH | `/api/products/{product_id}` | 상품 수정 | FR-16 | ❌ |
-| 이미지 | POST | `/api/storage/images` | 이미지 업로드 (스캔·상품) | FR-01, FR-16 | 🟡 `/upload` |
-| | GET | `/api/storage/signed-url` | 서명 URL 재발급 | | ✅ |
-| 스캔 | POST | `/api/scan-sessions` | 스캔 세션 생성 (기본·추가 촬영) | FR-01 | 🟡 |
-| | POST | `/api/scan-sessions/{id}/recognize` | AI 인식 실행 | FR-02 | ✅ (501) |
-| | POST | `/api/scan-sessions/{id}/cancel` | 인식 처리 중 취소 | FR-08 | ❌ |
-| | POST | `/api/scan-sessions/{id}/discard` | 세션 폐기 (다시 촬영) | FR-01 | ❌ |
-| | GET | `/api/scan-sessions/{id}` | 세션 상세 | FR-02 | ❌ |
-| 주문 | POST | `/api/orders` | 주문 시작(PENDING) | FR-09 | ❌ |
-| | GET | `/api/orders/current` | 진행 중 주문 복구 | FR-09 | ❌ |
-| | GET | `/api/orders` | 판매 내역 목록 | FR-17 | ❌ |
-| | GET | `/api/orders/{id}` | 주문 상세 | FR-17 | ❌ |
-| | POST | `/api/orders/{id}/items` | 항목 직접 추가 | FR-06 | ❌ |
-| | PATCH | `/api/orders/{id}/items/{item_id}` | 수량 변경·상품 재선택 | FR-04, FR-05 | ❌ |
-| | DELETE | `/api/orders/{id}/items/{item_id}` | 항목 삭제 | FR-04 | ❌ |
-| | POST | `/api/orders/{id}/member` | CJ ONE 회원 연결 | FR-18 | ❌ |
-| | DELETE | `/api/orders/{id}/member` | 회원 연결 해제 | FR-18 | ❌ |
-| | POST | `/api/orders/{id}/discount` | 직원 수동 할인 | FR-08 | ❌ |
-| | POST | `/api/orders/{id}/pay` | 결제 확정 | FR-09, FR-12 | ❌ |
-| | POST | `/api/orders/{id}/cancel` | 계산 취소 | FR-09 | ❌ |
-| 회원 | GET | `/api/members/lookup` | 휴대폰번호로 회원 조회 | FR-18 | ❌ |
-| 재고 | GET | `/api/inventory` | 재고 목록 | FR-13 | 🟡 |
-| | PATCH | `/api/inventory/{product_id}/restock` | 수량 보충 | FR-13 | ❌ |
-| 알림 | GET | `/api/notifications` | 알림 목록 | FR-15 | 🟡 |
-| | GET | `/api/notifications/unread-count` | 미읽음 수 | FR-15 | ❌ |
-| | PATCH | `/api/notifications/{id}/read` | 읽음 처리 | FR-15 | ✅ |
-| | PATCH | `/api/notifications/read-all` | 모두 읽음 | FR-15 | ❌ |
-| | DELETE | `/api/notifications/{id}` | 알림 삭제(소프트) | FR-15 | ❌ |
-| 대시보드 | GET | `/api/dashboard/overview` | 운영 현황 | FR-13, FR-17 | ❌ |
-| 통계 | GET | `/api/stats/sales` | **기간별 품목 판매 통계 (1차)** | FR-17 | ❌ |
+| 그룹 | 메서드 | 경로 | 설명 | FR | 구현 | 담당자 |
+|---|---|---|---|---|---|---|
+| 시스템 | GET | `/health` | 서버 생존 (nginx 밖) | | ✅ | 한지원 |
+| | GET | `/health/ready` | DB 연결 포함 준비 상태 | | ❌ | 한지원 |
+| | GET | `/api/me` | 현재 직원 정보 | | 🟡 | 한지원 |
+| 상품 | GET | `/api/products` | 상품 목록 | FR-16 | 🟡 | 한지원 |
+| | GET | `/api/products/{product_id}` | 상품 단건 | FR-16 | ❌ | 한지원 |
+| | GET | `/api/products/recommendations` | **메뉴 추천 TOP 3** | FR-11 | ❌ | 한지원 |
+| | POST | `/api/products` | 상품 등록 | FR-16 | 🟡 | 한지원 |
+| | PATCH | `/api/products/{product_id}` | 상품 수정 | FR-16 | ❌ | 한지원 |
+| 이미지 | POST | `/api/storage/images` | 이미지 업로드 (스캔·상품) | FR-01, FR-16 | 🟡 `/upload` | 한지원 |
+| | GET | `/api/storage/signed-url` | 서명 URL 재발급 | | ✅ | 한지원 |
+| 스캔 | POST | `/api/scan-sessions` | 스캔 세션 생성 (기본·추가 촬영) | FR-01 | 🟡 | 한지원 |
+| | POST | `/api/scan-sessions/{id}/recognize` | AI 인식 실행 | FR-02 | ✅ (501) | 한지원 |
+| | POST | `/api/scan-sessions/{id}/cancel` | 인식 처리 중 취소 | FR-08 | ❌ | 한지원 |
+| | POST | `/api/scan-sessions/{id}/discard` | 세션 폐기 (다시 촬영) | FR-01 | ❌ | 한지원 |
+| | GET | `/api/scan-sessions/{id}` | 세션 상세 | FR-02 | ❌ | 한지원 |
+| 주문 | POST | `/api/orders` | 주문 시작(PENDING) | FR-09 | ❌ | 한지원 |
+| | GET | `/api/orders/current` | 진행 중 주문 복구 | FR-09 | ❌ | 한지원 |
+| | GET | `/api/orders` | 판매 내역 목록 | FR-17 | ❌ | 한지원 |
+| | GET | `/api/orders/{id}` | 주문 상세 | FR-17 | ❌ | 한지원 |
+| | POST | `/api/orders/{id}/items` | 항목 직접 추가 | FR-06 | ❌ | 한지원 |
+| | PATCH | `/api/orders/{id}/items/{item_id}` | 수량 변경·상품 재선택 | FR-04, FR-05 | ❌ | 한지원 |
+| | DELETE | `/api/orders/{id}/items/{item_id}` | 항목 삭제 | FR-04 | ❌ | 한지원 |
+| | POST | `/api/orders/{id}/member` | CJ ONE 회원 연결 | FR-18 | ❌ | 한지원 |
+| | DELETE | `/api/orders/{id}/member` | 회원 연결 해제 | FR-18 | ❌ | 한지원 |
+| | POST | `/api/orders/{id}/discount` | 직원 수동 할인 | FR-08 | ❌ | 한지원 |
+| | POST | `/api/orders/{id}/pay` | 결제 확정 | FR-09, FR-12 | ❌ | 한지원 |
+| | POST | `/api/orders/{id}/cancel` | 계산 취소 | FR-09 | ❌ | 한지원 |
+| 회원 | GET | `/api/members/lookup` | 휴대폰번호로 회원 조회 | FR-18 | ❌ | 이상익 |
+| 재고 | GET | `/api/inventory` | 재고 목록 | FR-13 | 🟡 | 이상익 |
+| | PATCH | `/api/inventory/{product_id}/restock` | 수량 보충 | FR-13 | ❌ | 이상익 |
+| 알림 | GET | `/api/notifications` | 알림 목록 | FR-15 | 🟡 | 이상익 |
+| | GET | `/api/notifications/unread-count` | 미읽음 수 | FR-15 | ❌ | 이상익 |
+| | PATCH | `/api/notifications/{id}/read` | 읽음 처리 | FR-15 | ✅ | 이상익 |
+| | PATCH | `/api/notifications/read-all` | 모두 읽음 | FR-15 | ❌ | 이상익 |
+| | DELETE | `/api/notifications/{id}` | 알림 삭제(소프트) | FR-15 | ❌ | 이상익 |
+| 대시보드 | GET | `/api/dashboard/overview` | 운영 현황 | FR-13, FR-17 | ❌ | 이상익 |
+| 통계 | GET | `/api/stats/sales` | **기간별 품목 판매 통계 (1차)** | FR-17 | ❌ | 이상익 |
 
 > 모든 라우트에 `response_model`을 지정한다. 현재 코드는 지정된 라우트가 없어 `app/schemas/`의 응답 모델이 한 곳도 연결되지 않았다.
 

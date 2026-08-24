@@ -70,7 +70,6 @@ class Product(BaseModel):
     category: str | None = None
     price: Decimal
     image_url: str | None = None
-    ai_class_label: str | None = None
     source_type: ProductSourceType
     stock_baseline_pct: int | None = 5
     is_active: bool = True
@@ -92,6 +91,5 @@ class ProductCreate(BaseModel):
     category: str | None = None
     price: Decimal
     image_url: str | None = None
-    ai_class_label: str | None = None
     source_type: ProductSourceType
     stock_baseline_pct: int | None = 5
