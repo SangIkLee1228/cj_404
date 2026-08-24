@@ -41,6 +41,9 @@ app = FastAPI(
         {"name": "inventory",
             "description": "재고 대시보드 (FR-13, 참고 정보 - 자동 발주 아님)"},
         {"name": "notifications", "description": "매진 임박 수량 알림 (FR-15)"},
+        {"name": "members", "description": "CJ ONE 회원 조회 (FR-18)"},
+        {"name": "dashboard", "description": "운영 현황 대시보드 (FR-13/17, 매니저 전용)"},
+        {"name": "stats", "description": "기간별 판매 통계 (FR-17, 매니저 전용)"},
     ],
 )
 
