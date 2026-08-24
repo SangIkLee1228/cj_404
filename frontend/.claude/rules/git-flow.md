@@ -45,7 +45,7 @@ chore: ESLint/Prettier 설정 추가
 
 - **머지 방식은 Squash and merge다.** `dev-fe`/`master` 히스토리는 PR당 커밋 1개로 유지한다.
 - PR 제목은 Conventional Commits 형식을 따른다 — squash 시 그 제목이 최종 커밋 메시지가 된다.
-- PR 설명에는 최소한 다음을 포함한다: 변경 사항 요약, 검증 결과(`rules/frontend.md`의 Verification — lint/build 통과 여부).
+- PR 설명은 저장소 기본 템플릿(`.github/PULL_REQUEST_TEMPLATE.md`)을 그대로 채운다 — 요약, 관련 Screen ID, 검증(lint/format/build), 체크리스트를 포함한다.
 - `frontend-ci.yml`(lint → format:check → build)이 통과해야 머지 가능한 상태로 본다.
 
 ## Claude 작업 시 원칙
