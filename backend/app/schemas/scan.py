@@ -1,15 +1,27 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.schemas.codes import CorrectedByType, CorrectionType, ScanSessionStatus
+from app.schemas.codes import (
+    CaptureType,
+    CorrectedByType,
+    CorrectionType,
+    ScanSessionStatus,
+)
 
 
 class ScanSession(BaseModel):
+    """SCAN_SESSION 행 (DB설계서 v2.2 · 4.7).
+
+    order_id로 주문에 연결된다(1:N). 결제 확정 전이거나 폐기된 세션은 NULL이다.
+    """
+
     scan_session_id: int
     store_id: int
     staff_id: int
+    order_id: int | None = None
+    capture_type: CaptureType = "BASIC"
     image_url: str | None = None
     status: ScanSessionStatus = "CAPTURED"
     overlap_warning: bool = False
@@ -20,25 +32,31 @@ class ScanSession(BaseModel):
 
 
 class ScanSessionCreate(BaseModel):
-    """트레이 스캔 시작 (FR-01). image_url은 storage.upload_image()가 반환한 path.
+    """트레이 촬영 시작 (FR-01, API명세서 v1.2 · 4.4).
 
-    store_id/staff_id를 요청 바디로 직접 받는다: STAFF_ACCOUNT(BIGINT staff_id)와 Supabase
-    Auth 사용자(UUID)를 연결하는 매핑이 아직 없어 JWT에서 안전하게 유도할 수 없다.
+    store_id/staff_id는 요청 바디로 받지 않는다 - 서버가 인증 컨텍스트에서 결정한다.
+    image_path는 POST /api/storage/images가 반환한 경로이며 DB의 image_url 컬럼에 저장된다.
     """
 
-    store_id: int
-    staff_id: int
-    image_url: str | None = None
+    order_id: int
+    capture_type: CaptureType = "BASIC"
+    image_path: str | None = None
+    overlap_warning: bool = False
 
 
 class DetectedItem(BaseModel):
-    """AI가 트레이 이미지에서 탐지한 개별 항목 1건 (FR-02)."""
+    """AI가 트레이 이미지에서 탐지한 개별 항목 1건 (FR-02).
+
+    product_id가 None이면 AI 클래스에 매칭되는 상품이 없다는 뜻이다.
+    ai_class_label은 AI의 원본 출력이며, 현재 파이프라인에서는 상품명 문자열이다.
+    매칭 실패 시 '__UNMATCHED__'.
+    """
 
     detected_item_id: int
     scan_session_id: int
     product_id: int | None = None
     ai_class_label: str
-    confidence: Decimal  # 0~100
+    confidence: Decimal = Field(ge=0, le=100)
     bbox_x: Decimal | None = None
     bbox_y: Decimal | None = None
     bbox_w: Decimal | None = None
