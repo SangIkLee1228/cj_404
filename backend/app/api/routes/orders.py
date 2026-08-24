@@ -36,7 +36,7 @@ def create_order(staff: StaffContext = Depends(get_staff_context)):
     created = (
         supabase.table("orders")
         .insert({"store_id": staff.store_id, "staff_id": staff.staff_id, "status": "PENDING"})
-        .execute
+        .execute()
     ).data[0]
 
     logger.info("order.created", order_id=created["order_id"])
