@@ -25,8 +25,9 @@
 코드를 변경한 뒤에는 가능한 범위에서 다음을 수행한다.
 
 1. **lint** — `npm run lint`
-2. **test** — 아직 테스트 러너가 없다(별도 테스트 브랜치에서 도입 예정). 러너가 추가되기 전까지는 생략한다.
-3. **build** — `npm run build`
+2. **format:check** — `npm run format:check` (실패 시 `npm run format`으로 적용한 뒤 diff를 확인한다)
+3. **test** — 아직 테스트 러너가 없다(별도 테스트 브랜치에서 도입 예정). 러너가 추가되기 전까지는 생략한다.
+4. **build** — `npm run build`
 
 - typecheck 단계는 두지 않는다 — 프로젝트가 JavaScript이므로 해당 사항 없다.
 - 검증 실패를 숨기거나 임의로 무시하지 않는다.

@@ -50,6 +50,7 @@ chore: ESLint/Prettier 설정 추가
 
 ## Claude 작업 시 원칙
 
+- **push하기 전에 `rules/frontend.md`의 Verification(lint/format:check/build) 결과와 변경 diff를 사용자에게 보여주고 확인받는다.** 확인 전에는 push하지 않는다.
 - **커밋 메시지에 Claude를 공동 작성자(Co-Authored-By 등)로 표기하지 않는다.** 예외 없이 지킨다.
 - **force push(`git push --force`, `--force-with-lease` 포함)를 하지 않는다.** 예외 없이 지킨다 — 필요하다고 판단되어도 사용자에게 먼저 확인한다.
 - **`master`로 직접 PR을 열지 않는다.** 작업 브랜치의 PR 대상은 항상 `dev-fe`다.
