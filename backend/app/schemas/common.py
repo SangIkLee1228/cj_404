@@ -156,3 +156,18 @@ class ProductUpdate(BaseModel):
     stock_baseline_pct: int | None = Field(default=None, ge=0, le=100)
     image_url: str | None = None
     is_active: bool | None = None
+
+
+class MemberLookupResponse(BaseModel):
+    """GET /api/members/lookup 응답 (API명세서 v1.3 · 4.6, FR-18).
+
+    name은 서버가 항상 마스킹해서 내려준다 - 원본은 API로 나가지 않는다(NFR-06).
+    """
+
+    member_id: int
+    name: str
+    grade_code: MembershipGradeCode
+    grade_name: str
+    discount_rate: Decimal
+    point_earn_rate: Decimal
+    point_balance: int
