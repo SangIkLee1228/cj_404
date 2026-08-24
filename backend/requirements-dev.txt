@@ -1,0 +1,6 @@
+# 로컬 개발 / CI 전용 (테스트, 린트). 프로덕션 이미지에는 설치하지 않는다.
+-r requirements.txt
+
+pytest==8.3.4
+httpx==0.27.2  # supabase 2.10.0's postgrest/storage3/supafunc pin httpx<0.28
+ruff==0.9.4
