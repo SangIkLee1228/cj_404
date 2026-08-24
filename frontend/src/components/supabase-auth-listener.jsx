@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { createClient } from "@/lib/supabase/client";
-import { useAuthStore } from "@/store/useAuthStore";
-import { useEffect } from "react";
+import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useEffect } from 'react';
 
 /** Mounted once in the root layout: keeps useAuthStore's `user` in sync with Supabase Auth. */
 export function SupabaseAuthListener() {
@@ -12,9 +12,11 @@ export function SupabaseAuthListener() {
 
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
 
     return () => subscription.subscription.unsubscribe();
   }, []);

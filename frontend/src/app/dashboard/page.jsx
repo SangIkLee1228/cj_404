@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { BackendStatus } from "./backend-status";
+import { createClient } from '@/lib/supabase/server';
+import { BackendStatus } from './backend-status';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
