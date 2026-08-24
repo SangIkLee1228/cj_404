@@ -24,6 +24,7 @@
 rules/
 ├── ux.md                  사용자 흐름·역할·UX 정책 기준
 ├── frontend.md            확정 기술 스택 · 자체 검증(Verification) 규율
+├── git-flow.md            브랜치·커밋·PR 규칙
 └── design/
     ├── foundation.md      POS·대시보드 공통 디자인 원칙
     ├── pos.md              POS·고객 화면 전용 디자인 규칙
@@ -36,8 +37,9 @@ rules/
 
 1. **`rules/ux.md`** — 어떤 화면을 작업하든 가장 먼저 읽는다. 사용자 흐름·역할·조작 범위·예외 처리·변경 금지 사항이 정리돼 있다.
 2. **`rules/frontend.md`** — 코드를 만지기 전에 확정된 스택과 자체 검증(Verification) 규율을 확인한다.
-3. **`rules/design/foundation.md`** — POS·대시보드 공통 디자인 원칙.
-4. 작업 대상이 POS/고객 화면이면 **`rules/design/pos.md`**, 대시보드면 **`rules/design/dashboard.md`**를 추가로 읽는다.
+3. **`rules/git-flow.md`** — 브랜치를 만들거나 커밋·PR을 작성하기 전에 확인한다.
+4. **`rules/design/foundation.md`** — POS·대시보드 공통 디자인 원칙.
+5. 작업 대상이 POS/고객 화면이면 **`rules/design/pos.md`**, 대시보드면 **`rules/design/dashboard.md`**를 추가로 읽는다.
 
 ## 기본 원칙
 
@@ -52,3 +54,4 @@ rules/
 - UX 규칙과 디자인 규칙이 충돌하는 것처럼 보이면 추측해서 진행하지 않고 사용자에게 확인한다.
 - 폴더 구조, API 호출 패턴, 상태 관리 사용 패턴, 코딩 컨벤션, 테스트 도구 등 `rules/frontend.md`에 없는 개발 아키텍처를 임의로 도입하지 않는다.
 - 코드를 변경했으면 `rules/frontend.md`의 Verification 규율에 따라 스스로 검증하고, 실패를 숨기지 않고 그대로 보고한다.
+- 브랜치·커밋·PR은 `rules/git-flow.md`를 따른다. 특히 커밋에 Claude를 공동 작성자로 표기하지 않는다.
