@@ -13,7 +13,9 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
       <div className={styles.scanList}>
         <div className={styles.scanEmpty}>
           <b>계산 상품이 아직 없습니다</b>
-          <span>트레이 촬영 또는 오른쪽 상품 메뉴에서 빵·음료를 추가해주세요.</span>
+          <span>
+            트레이 촬영 또는 오른쪽 상품 메뉴에서 빵·음료를 추가해주세요.
+          </span>
         </div>
       </div>
     );
@@ -30,7 +32,9 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
             <div>
               <div className={styles.scanName}>
                 {item.name}
-                <span className={styles.sourceBadge}>{SOURCE_LABEL[item.source]}</span>
+                <span className={styles.sourceBadge}>
+                  {SOURCE_LABEL[item.source]}
+                </span>
               </div>
               <div className={styles.scanSub}>
                 {formatWon(item.price)}
@@ -55,7 +59,9 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
             >
               ＋
             </button>
-            <div className={styles.scanPrice}>{formatWon(item.price * item.qty)}</div>
+            <div className={styles.scanPrice}>
+              {formatWon(item.price * item.qty)}
+            </div>
           </div>
         );
       })}

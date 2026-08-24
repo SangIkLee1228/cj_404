@@ -6,15 +6,29 @@ import PaymentArea from '../payment/PaymentArea';
 import ProductCatalog from '../product-catalog/ProductCatalog';
 import CaptureControls from '../ai-capture/CaptureControls';
 
-export default function RecognitionScreen({ pos, onRequestRetake, onRequestCancel }) {
-  const { state, activeCart, totalCount, totalAmount, points, memberName } = pos;
-  const aiItems = activeCart.filter((item) => item.source === 'ai' || item.source === 'mixed');
+export default function RecognitionScreen({
+  pos,
+  onRequestRetake,
+  onRequestCancel,
+}) {
+  const { state, activeCart, totalCount, totalAmount, points, memberName } =
+    pos;
+  const aiItems = activeCart.filter(
+    (item) => item.source === 'ai' || item.source === 'mixed'
+  );
 
   return (
     <main className={styles.recognitionMain}>
       <section className={styles.middle}>
-        <TrayRecognition hasCaptured={state.capture.hasCaptured} aiItems={aiItems} />
-        <CartList items={activeCart} remainingOf={pos.remainingOf} onChangeQty={pos.changeQty} />
+        <TrayRecognition
+          hasCaptured={state.capture.hasCaptured}
+          aiItems={aiItems}
+        />
+        <CartList
+          items={activeCart}
+          remainingOf={pos.remainingOf}
+          onChangeQty={pos.changeQty}
+        />
         <div className={styles.bottomActions}>
           <MembershipPanel
             cartEmpty={activeCart.length === 0}

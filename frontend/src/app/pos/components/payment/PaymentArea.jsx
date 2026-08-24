@@ -1,7 +1,14 @@
 import styles from '../../pos.module.css';
 import { formatWon } from '../../helpers/formatters';
 
-export default function PaymentArea({ totalCount, totalAmount, paid, cartEmpty, onPay, onNewOrder }) {
+export default function PaymentArea({
+  totalCount,
+  totalAmount,
+  paid,
+  cartEmpty,
+  onPay,
+  onNewOrder,
+}) {
   return (
     <>
       <div className={styles.summaryLine}>

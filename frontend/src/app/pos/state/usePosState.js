@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import {
   MOCK_ADD_CAPTURE,
   MOCK_BASIC_CAPTURE,
@@ -17,7 +24,12 @@ const MEMBER_NAME = '정우현';
 
 const initialState = {
   cart: [], // { name, price, qty, source: 'ai'|'manual'|'mixed', confidence, emoji, productId }
-  capture: { hasCaptured: false, mode: 'basic', screen: 'recognition', scanStartedAt: null }, // screen: 'recognition' | 'shooting'
+  capture: {
+    hasCaptured: false,
+    mode: 'basic',
+    screen: 'recognition',
+    scanStartedAt: null,
+  }, // screen: 'recognition' | 'shooting'
   membership: { phone: '010', memberConfirmed: false, phoneOverlayOpen: false },
   payment: { paid: false },
   catalogFilter: { productType: 'bread', category: '전체' },
@@ -37,10 +49,15 @@ function mergeWithStockLimit(base, incoming, managerState, inventoryOverrides) {
   const skipped = [];
 
   incoming.forEach((item) => {
-    const remaining = resolveRemaining(managerState, inventoryOverrides, item.name);
+    const remaining = resolveRemaining(
+      managerState,
+      inventoryOverrides,
+      item.name
+    );
     const existing = out.find((x) => x.name === item.name);
     const current = existing ? existing.qty : 0;
-    const allowed = remaining === Infinity ? item.qty : Math.max(0, remaining - current);
+    const allowed =
+      remaining === Infinity ? item.qty : Math.max(0, remaining - current);
     const addQty = Math.min(item.qty, allowed);
 
     if (addQty <= 0) {
@@ -50,9 +67,16 @@ function mergeWithStockLimit(base, incoming, managerState, inventoryOverrides) {
     if (existing) {
       existing.qty += addQty;
       if (existing.source !== item.source) existing.source = 'mixed';
-      existing.confidence = Math.max(existing.confidence || 0, item.confidence || 0);
+      existing.confidence = Math.max(
+        existing.confidence || 0,
+        item.confidence || 0
+      );
     } else {
-      out.push({ ...item, qty: addQty, productId: findProductByName(item.name)?.productId });
+      out.push({
+        ...item,
+        qty: addQty,
+        productId: findProductByName(item.name)?.productId,
+      });
     }
     if (addQty < item.qty) skipped.push(item.name);
   });
@@ -67,7 +91,12 @@ const CAPTURE_MOCKS = {
 };
 
 function resetMembershipFields(state) {
-  return { ...state.membership, phone: '010', memberConfirmed: false, phoneOverlayOpen: false };
+  return {
+    ...state.membership,
+    phone: '010',
+    memberConfirmed: false,
+    phoneOverlayOpen: false,
+  };
 }
 
 function reducer(state, action) {
@@ -81,7 +110,11 @@ function reducer(state, action) {
       if (!item) return state;
 
       if (delta > 0) {
-        const remaining = resolveRemaining(state.managerState, state.inventoryOverrides, name);
+        const remaining = resolveRemaining(
+          state.managerState,
+          state.inventoryOverrides,
+          name
+        );
         if (remaining !== Infinity && item.qty + delta > remaining) {
           return { ...state, _stockWarning: { name, remaining } };
         }
@@ -91,9 +124,16 @@ function reducer(state, action) {
       const cart =
         nextQty === 0
           ? state.cart.filter((x) => x.name !== name)
-          : state.cart.map((x) => (x.name === name ? { ...x, qty: nextQty } : x));
+          : state.cart.map((x) =>
+              x.name === name ? { ...x, qty: nextQty } : x
+            );
 
-      return { ...state, cart, _stockWarning: null, correctionCount: state.correctionCount + 1 };
+      return {
+        ...state,
+        cart,
+        _stockWarning: null,
+        correctionCount: state.correctionCount + 1,
+      };
     }
 
     case 'MANUAL_ADD': {
@@ -101,7 +141,11 @@ function reducer(state, action) {
       const product = findProductByName(name);
       if (!product) return state;
 
-      const remaining = resolveRemaining(state.managerState, state.inventoryOverrides, name);
+      const remaining = resolveRemaining(
+        state.managerState,
+        state.inventoryOverrides,
+        name
+      );
       const current = cartQtyByName(state.cart, name);
       if (remaining !== Infinity && current + 1 > remaining) {
         return { ...state, _stockWarning: { name, remaining } };
@@ -109,7 +153,9 @@ function reducer(state, action) {
 
       const existing = state.cart.find((x) => x.name === name);
       const cart = existing
-        ? state.cart.map((x) => (x.name === name ? { ...x, qty: x.qty + 1 } : x))
+        ? state.cart.map((x) =>
+            x.name === name ? { ...x, qty: x.qty + 1 } : x
+          )
         : [
             ...state.cart,
             {
@@ -124,7 +170,13 @@ function reducer(state, action) {
             },
           ];
 
-      return { ...state, cart, _stockWarning: null, _lastAdded: product.name, correctionCount: state.correctionCount + 1 };
+      return {
+        ...state,
+        cart,
+        _stockWarning: null,
+        _lastAdded: product.name,
+        correctionCount: state.correctionCount + 1,
+      };
     }
 
     case 'APPLY_CAPTURE': {
@@ -133,7 +185,12 @@ function reducer(state, action) {
       const manualKept = state.cart.filter((x) => x.source === 'manual');
       const base = mode === 'add' ? state.cart : manualKept;
 
-      const { items, skipped } = mergeWithStockLimit(base, mockItems, state.managerState, state.inventoryOverrides);
+      const { items, skipped } = mergeWithStockLimit(
+        base,
+        mockItems,
+        state.managerState,
+        state.inventoryOverrides
+      );
 
       return {
         ...state,
@@ -152,7 +209,8 @@ function reducer(state, action) {
           ...state.capture,
           mode: action.mode,
           screen: 'shooting',
-          scanStartedAt: state.capture.scanStartedAt || new Date().toISOString(),
+          scanStartedAt:
+            state.capture.scanStartedAt || new Date().toISOString(),
         },
       };
     }
@@ -165,15 +223,32 @@ function reducer(state, action) {
       return {
         ...state,
         cart: [],
-        capture: { hasCaptured: false, mode: 'basic', screen: 'recognition', scanStartedAt: null },
+        capture: {
+          hasCaptured: false,
+          mode: 'basic',
+          screen: 'recognition',
+          scanStartedAt: null,
+        },
         membership: resetMembershipFields(state),
         correctionCount: 0,
       };
     }
 
     case 'OPEN_MEMBERSHIP': {
-      if (state.cart.length === 0 || state.payment.paid || state.membership.memberConfirmed) return state;
-      return { ...state, membership: { ...state.membership, phone: '010', phoneOverlayOpen: true } };
+      if (
+        state.cart.length === 0 ||
+        state.payment.paid ||
+        state.membership.memberConfirmed
+      )
+        return state;
+      return {
+        ...state,
+        membership: {
+          ...state.membership,
+          phone: '010',
+          phoneOverlayOpen: true,
+        },
+      };
     }
 
     case 'PHONE_KEY': {
@@ -188,13 +263,20 @@ function reducer(state, action) {
     }
 
     case 'CANCEL_PHONE':
-      return { ...state, membership: { ...state.membership, phoneOverlayOpen: false } };
+      return {
+        ...state,
+        membership: { ...state.membership, phoneOverlayOpen: false },
+      };
 
     case 'CONFIRM_PHONE': {
       if (state.membership.phone.length !== 11) return state;
       return {
         ...state,
-        membership: { ...state.membership, memberConfirmed: true, phoneOverlayOpen: false },
+        membership: {
+          ...state.membership,
+          memberConfirmed: true,
+          phoneOverlayOpen: false,
+        },
       };
     }
 
@@ -202,23 +284,37 @@ function reducer(state, action) {
       if (state.cart.length === 0 || state.payment.paid) return state;
 
       const insufficient = state.cart.filter((item) => {
-        const remaining = resolveRemaining(state.managerState, state.inventoryOverrides, item.name);
+        const remaining = resolveRemaining(
+          state.managerState,
+          state.inventoryOverrides,
+          item.name
+        );
         return remaining !== Infinity && item.qty > remaining;
       });
       if (insufficient.length > 0) {
-        return { ...state, _stockWarning: { names: insufficient.map((x) => x.name) } };
+        return {
+          ...state,
+          _stockWarning: { names: insufficient.map((x) => x.name) },
+        };
       }
 
       // 대시보드 동기화가 없는 독립 실행(로컬 폴백)에서도 재고가 줄어들도록 유지한다.
       const inventoryOverrides = { ...state.inventoryOverrides };
       state.cart.forEach((item) => {
         if (item.name in MOCK_INVENTORY_BY_NAME) {
-          const remaining = resolveRemaining(null, inventoryOverrides, item.name);
+          const remaining = resolveRemaining(
+            null,
+            inventoryOverrides,
+            item.name
+          );
           inventoryOverrides[item.name] = Math.max(0, remaining - item.qty);
         }
       });
 
-      const totalAmount = state.cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+      const totalAmount = state.cart.reduce(
+        (sum, item) => sum + item.qty * item.price,
+        0
+      );
       return {
         ...state,
         inventoryOverrides,
@@ -242,17 +338,28 @@ function reducer(state, action) {
       return {
         ...state,
         cart: [],
-        capture: { hasCaptured: false, mode: 'basic', screen: 'recognition', scanStartedAt: null },
+        capture: {
+          hasCaptured: false,
+          mode: 'basic',
+          screen: 'recognition',
+          scanStartedAt: null,
+        },
         membership: resetMembershipFields(state),
         payment: { paid: false },
         correctionCount: 0,
       };
 
     case 'SET_CATALOG_TYPE':
-      return { ...state, catalogFilter: { productType: action.productType, category: '전체' } };
+      return {
+        ...state,
+        catalogFilter: { productType: action.productType, category: '전체' },
+      };
 
     case 'SET_CATALOG_CATEGORY':
-      return { ...state, catalogFilter: { ...state.catalogFilter, category: action.category } };
+      return {
+        ...state,
+        catalogFilter: { ...state.catalogFilter, category: action.category },
+      };
 
     case 'CLEAR_STOCK_WARNING':
       return { ...state, _stockWarning: null };
@@ -282,7 +389,10 @@ export function usePosState() {
 
   const activeCart = state.cart.filter((item) => item.qty > 0);
   const totalCount = activeCart.reduce((sum, item) => sum + item.qty, 0);
-  const totalAmount = activeCart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const totalAmount = activeCart.reduce(
+    (sum, item) => sum + item.qty * item.price,
+    0
+  );
   const points = computePoints(totalAmount);
 
   // 대시보드 동기화 상태를 리듀서로 흘려보낸다 — 이후 모든 재고/카탈로그 판단은 리듀서 안에서 일관되게 처리된다.
@@ -291,7 +401,9 @@ export function usePosState() {
   }, [posSync.managerState]);
 
   useEffect(() => {
-    posSync.setScreen(state.payment.paid ? 'PAID' : activeCart.length > 0 ? 'ACTIVE' : 'READY');
+    posSync.setScreen(
+      state.payment.paid ? 'PAID' : activeCart.length > 0 ? 'ACTIVE' : 'READY'
+    );
   });
 
   // 결제 완료 시 커밋할 주문이 쌓이면 sync adapter를 통해 대시보드 쪽 공유 상태에 반영한다.
@@ -302,8 +414,9 @@ export function usePosState() {
   }, [state._pendingOrder, posSync]);
 
   const remainingOf = useCallback(
-    (name) => resolveRemaining(state.managerState, state.inventoryOverrides, name),
-    [state.managerState, state.inventoryOverrides],
+    (name) =>
+      resolveRemaining(state.managerState, state.inventoryOverrides, name),
+    [state.managerState, state.inventoryOverrides]
   );
 
   const popularTop3 = useMemo(() => {
@@ -311,7 +424,11 @@ export function usePosState() {
       .map(([name, soldToday]) => {
         const product = findProductByName(name);
         if (!product) return null;
-        const remaining = resolveRemaining(state.managerState, state.inventoryOverrides, name);
+        const remaining = resolveRemaining(
+          state.managerState,
+          state.inventoryOverrides,
+          name
+        );
         if (remaining !== Infinity && remaining <= 0) return null;
         const stockRemaining = remaining === Infinity ? 999 : remaining;
         return {
@@ -326,7 +443,10 @@ export function usePosState() {
     return candidates.slice(0, 3);
   }, [state.managerState, state.inventoryOverrides]);
 
-  const customerViewState = state.capture.screen === 'shooting' || activeCart.length === 0 ? 'greeting' : 'order';
+  const customerViewState =
+    state.capture.screen === 'shooting' || activeCart.length === 0
+      ? 'greeting'
+      : 'order';
 
   useEffect(() => {
     if (!state._stockWarning) return;
@@ -343,7 +463,10 @@ export function usePosState() {
   useEffect(() => {
     if (!state._captureSkipped) return;
     const skipped = state._captureSkipped;
-    const modeLabel = { basic: '기본 촬영', add: '추가 촬영', retake: '다시 촬영' }[state.capture.mode] || '촬영';
+    const modeLabel =
+      { basic: '기본 촬영', add: '추가 촬영', retake: '다시 촬영' }[
+        state.capture.mode
+      ] || '촬영';
     const successMessage = {
       basic: '기본 촬영 결과를 반영했습니다.',
       add: '추가 촬영 상품을 기존 계산에 더했습니다.',
@@ -352,7 +475,7 @@ export function usePosState() {
     showToast(
       skipped.length
         ? `${modeLabel} 반영 · 매진/재고부족 제외: ${skipped.join(', ')}`
-        : successMessage,
+        : successMessage
     );
     dispatch({ type: 'CLEAR_CAPTURE_SKIPPED' });
   }, [state._captureSkipped, state.capture.mode, showToast]);
@@ -386,14 +509,35 @@ export function usePosState() {
   }, [showToast, state.payment.paid, state.cart.length]);
 
   const newOrder = useCallback(() => dispatch({ type: 'NEW_ORDER' }), []);
-  const openMembership = useCallback(() => dispatch({ type: 'OPEN_MEMBERSHIP' }), []);
-  const phoneKey = useCallback((key) => dispatch({ type: 'PHONE_KEY', key }), []);
+  const openMembership = useCallback(
+    () => dispatch({ type: 'OPEN_MEMBERSHIP' }),
+    []
+  );
+  const phoneKey = useCallback(
+    (key) => dispatch({ type: 'PHONE_KEY', key }),
+    []
+  );
   const cancelPhone = useCallback(() => dispatch({ type: 'CANCEL_PHONE' }), []);
-  const confirmPhone = useCallback(() => dispatch({ type: 'CONFIRM_PHONE' }), []);
-  const openCaptureScreen = useCallback((mode) => dispatch({ type: 'OPEN_CAPTURE_SCREEN', mode }), []);
-  const closeCaptureScreen = useCallback(() => dispatch({ type: 'CLOSE_CAPTURE_SCREEN' }), []);
-  const setCatalogType = useCallback((productType) => dispatch({ type: 'SET_CATALOG_TYPE', productType }), []);
-  const setCatalogCategory = useCallback((category) => dispatch({ type: 'SET_CATALOG_CATEGORY', category }), []);
+  const confirmPhone = useCallback(
+    () => dispatch({ type: 'CONFIRM_PHONE' }),
+    []
+  );
+  const openCaptureScreen = useCallback(
+    (mode) => dispatch({ type: 'OPEN_CAPTURE_SCREEN', mode }),
+    []
+  );
+  const closeCaptureScreen = useCallback(
+    () => dispatch({ type: 'CLOSE_CAPTURE_SCREEN' }),
+    []
+  );
+  const setCatalogType = useCallback(
+    (productType) => dispatch({ type: 'SET_CATALOG_TYPE', productType }),
+    []
+  );
+  const setCatalogCategory = useCallback(
+    (category) => dispatch({ type: 'SET_CATALOG_CATEGORY', category }),
+    []
+  );
 
   const shootingRef = useRef(false);
   const [isShooting, setIsShooting] = useState(false);

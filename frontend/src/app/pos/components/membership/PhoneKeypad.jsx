@@ -13,15 +13,33 @@ export default function PhoneKeypad({ phone, onKey, onCancel, onConfirm }) {
       <div className={styles.phoneInput}>{formatPhoneDisplay(phone)}</div>
       <div className={styles.keypad}>
         {KEYS.map((k, i) => {
-          if (k === null) return <button key={`blank-${i}`} type="button" className={`${styles.key} ${styles.blank}`} tabIndex={-1} />;
+          if (k === null)
+            return (
+              <button
+                key={`blank-${i}`}
+                type="button"
+                className={`${styles.key} ${styles.blank}`}
+                tabIndex={-1}
+              />
+            );
           if (k === 'back')
             return (
-              <button key={k} type="button" className={`${styles.key} ${styles.back}`} onClick={() => onKey('back')}>
+              <button
+                key={k}
+                type="button"
+                className={`${styles.key} ${styles.back}`}
+                onClick={() => onKey('back')}
+              >
                 ⌫
               </button>
             );
           return (
-            <button key={k} type="button" className={styles.key} onClick={() => onKey(k)}>
+            <button
+              key={k}
+              type="button"
+              className={styles.key}
+              onClick={() => onKey(k)}
+            >
               {k}
             </button>
           );
@@ -31,7 +49,12 @@ export default function PhoneKeypad({ phone, onKey, onCancel, onConfirm }) {
         <button type="button" className={styles.cancel} onClick={onCancel}>
           취소
         </button>
-        <button type="button" className={styles.confirm} disabled={confirmDisabled} onClick={onConfirm}>
+        <button
+          type="button"
+          className={styles.confirm}
+          disabled={confirmDisabled}
+          onClick={onConfirm}
+        >
           확인
         </button>
       </div>
