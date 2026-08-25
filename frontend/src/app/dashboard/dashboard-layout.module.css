@@ -1,0 +1,377 @@
+/* Dashboard 전용 레이아웃 스타일이며 POS를 포함한 다른 화면에
+   영향을 주지 않도록 이 파일 안에서만 관리한다. */
+
+.layout {
+  /* position:fixed + inset:0으로 Dashboard Shell 전체를 viewport에 직접
+     고정한다. 이렇게 하면 body/document가 조금이라도 스크롤 가능해지는
+     경우(서브픽셀 오차, 스크롤 체이닝 등)에도 .layout 자체는 viewport에
+     못박혀 있어 Sidebar가 콘텐츠 스크롤과 함께 움직이지 않는다.
+     inset:0이 top/right/bottom/left를 모두 0으로 고정하므로 width/height는
+     별도로 선언하지 않는다(중복). */
+  position: fixed;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.sidebar {
+  /* 현재 값은 docs 목업을 기준으로 Sidebar를 확인하기 위한 최소 색상이며,
+     Dashboard 컬러 토큰 단계에서 의미 기반 토큰으로 교체한다. */
+  --sidebar-bg-start: #085341;
+  --sidebar-bg-end: #043025;
+  --sidebar-text: #ffffff;
+  --sidebar-text-muted: #a9c9bd;
+  --sidebar-group-text: #6fa895;
+  --sidebar-border: rgba(255, 255, 255, 0.16);
+  --sidebar-shadow: 6px 0 22px rgba(3, 58, 44, 0.14);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.18);
+  --sidebar-item-padding-x: 11px;
+  --sidebar-icon-size: 18px;
+  --sidebar-item-gap: 10px;
+
+  flex-shrink: 0;
+  width: 240px;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px 20px;
+  background: linear-gradient(
+    165deg,
+    var(--sidebar-bg-start) 0%,
+    var(--sidebar-bg-end) 100%
+  );
+  color: var(--sidebar-text);
+  box-shadow: var(--sidebar-shadow);
+}
+
+.logoArea {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.logoImage {
+  display: block;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 독립 메뉴 · 그룹 레이블 · 그룹 내부 메뉴의 간격을 각각 다른 값으로 둔다.
+   레이블은 margin-top으로 이전 항목과 충분히 떨어뜨리고, margin-bottom으로
+   그룹 첫 항목과의 간격을 좁힌다. 그룹 내부 항목끼리는 margin-top을 최소로 둬
+   조밀하게 붙인다(마진 상쇄로 레이블 바로 다음 항목은 레이블 쪽 값을 따른다). */
+.navList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 그룹 레이블(li.navSectionLabel)은 자체 margin으로 간격을 책임지므로
+   제외하고, 메뉴 항목 li에만 조밀한 margin-top을 준다. */
+.navList > li:not(.navSectionLabel) {
+  margin-top: 2px;
+}
+
+.navList > li:first-child {
+  margin-top: 0;
+}
+
+/* 메뉴 항목 전체 행이 Link(a)가 된다. 브라우저 기본 링크 스타일을
+   지우고 li 폭 전체를 채운다. */
+.navItem {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  align-items: center;
+  gap: var(--sidebar-item-gap);
+  min-height: 40px;
+  padding: 9px var(--sidebar-item-padding-x);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sidebar-text-muted);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--sidebar-text);
+  outline-offset: -2px;
+}
+
+.navItem[data-active='true'] {
+  color: var(--sidebar-text);
+  background: var(--sidebar-active-bg);
+}
+
+.navItem[data-active='true']:hover {
+  background: var(--sidebar-active-bg);
+}
+
+.navSectionLabel {
+  margin: 28px 4px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--sidebar-group-text);
+}
+
+.navIcon {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+}
+
+/* outline/filled 두 아이콘을 같은 자리에 겹쳐 두고 opacity로만 전환한다.
+   전환에 관계없이 아이콘 영역 크기가 고정되어 메뉴 레이아웃이 움직이지 않는다. */
+.iconOutline,
+.iconFilled {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.iconFilled {
+  opacity: 0;
+}
+
+.navItem[data-active='true'] .iconOutline {
+  opacity: 0;
+}
+
+.navItem[data-active='true'] .iconFilled {
+  opacity: 1;
+}
+
+.sidebarBottom {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+/* 알림 항목을 위·아래 border 사이 중앙에 둔다. border1(sidebarAlerts) →
+   14px → 알림 → 14px(storeInfo의 margin-top) → border2(storeInfo)로
+   위·아래 간격을 동일하게 맞춘다. */
+.sidebarAlerts {
+  padding-top: 14px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+/* storeName/managerName의 왼쪽 시작점을 메뉴 아이콘 컨테이너의
+   왼쪽 시작점(.navItem의 padding-left)과 맞춘다. */
+.storeInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 16px var(--sidebar-item-padding-x) 4px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.storeInfoText {
+  min-width: 0;
+}
+
+.storeName {
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sidebar-text);
+}
+
+.managerName {
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sidebar-text-muted);
+}
+
+.logoutButton {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text-muted);
+}
+
+.logoutButton:disabled {
+  cursor: not-allowed;
+}
+
+.logoutButtonIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.main {
+  /* Dashboard 컬러 시스템 이전까지 Topbar·Page 설명 텍스트에 쓰는 최소 muted 값.
+     Main 배경(bg-slate-50)·텍스트(text-slate-900)와 어울리는 중립 회색이며
+     Sidebar 로컬 변수와는 독립적이다. Topbar와 PageHeader가 공유하는 값이라
+     둘의 공통 조상인 .main에서 한 번만 선언한다. */
+  --page-text-muted: #64748b;
+
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  --topbar-border: #e2e8f0;
+
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 64px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--topbar-border);
+}
+
+.topbarHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.topbarTitle {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.topbarSubtitle {
+  font-size: 11px;
+  color: var(--page-text-muted);
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.topbarStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--topbar-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--page-text-muted);
+}
+
+.topbarStatusDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.topbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--topbar-border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.topbarButtonIcon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.topbarButton:disabled {
+  color: var(--page-text-muted);
+  cursor: not-allowed;
+}
+
+.contentViewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* overflow-x가 이미 hidden이라 x축 overscroll은 의미가 없다. y축만
+     명시해 콘텐츠가 짧아 실제로 넘칠 게 없을 때도 트랙패드의 탄성/바운스
+     스크롤 효과가 보이지 않게 한다(스크롤 체이닝 방지 목적의 기존
+     overscroll-behavior:contain과 역할이 겹쳐 하나로 정리). */
+  overscroll-behavior-y: none;
+}
+
+.page {
+  padding: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pageHeaderMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pageHeaderActions {
+  flex: 0 0 auto;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pageDescription {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--page-text-muted);
+}
+
+.pageContent {
+  margin-top: 24px;
+}

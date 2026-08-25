@@ -20,7 +20,7 @@ export function BackendStatus() {
   }, []);
 
   return (
-    <div className="mt-6 rounded-md border border-slate-200 p-4 text-sm">
+    <div className="rounded-md border border-slate-200 p-4 text-sm">
       <p>백엔드 상태: {status}</p>
       <p>매장: {me?.store_name ?? '-'}</p>
       <p>
