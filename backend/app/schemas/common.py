@@ -127,6 +127,20 @@ class ProductRead(BaseModel):
     is_active: bool = True
 
 
+class ProductListResponse(BaseModel):
+    '''
+    GET /api/products 응답 (API 명세서 1.3 목록 규약)
+
+    items, total, limit, offset 은 모든 목록 응답에 항상 포함한다.
+    inventory, notifications 도 같은 모양이라 구조를 맞춰둔다.
+    '''
+
+    items: list[ProductRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class ProductCreate(BaseModel):
     """매니저의 상품 마스터 등록 (FR-16, API명세서 v1.2 · 4.2).
 
@@ -148,7 +162,8 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     """PATCH /api/products/{id} - 보낸 필드만 수정한다."""
 
-    product_name: str | None = Field(default=None, min_length=1, max_length=100)
+    product_name: str | None = Field(
+        default=None, min_length=1, max_length=100)
     product_type: ProductType | None = None
     category: str | None = None
     price: Decimal | None = Field(default=None, ge=0)
@@ -171,3 +186,37 @@ class MemberLookupResponse(BaseModel):
     discount_rate: Decimal
     point_earn_rate: Decimal
     point_balance: int
+
+
+class MeResponse(BaseModel):
+    '''
+    GET /api/me 응답 (API명세서 4.1).
+
+    auth_user_id는 AUTH_DISABLED=true면 항상 None이다. FE가 직접 쓰진 않지만 로깅·로그인 확장 대비로 내려준다.
+    '''
+
+    staff_id: int
+    store_id: int
+    name: str
+    role: StaffRole
+    store_name: str
+    auth_user_id: UUID | None = None
+
+
+class ProductRecommendation(BaseModel):
+    """GET /api/products/recommendations 항목 1건 (API명세서 4.2)."""
+
+    product_id: int
+    product_name: str
+    product_type: ProductType
+    price: int
+    image_url: str | None = None
+    sold_qty_7d: int
+    remaining_qty: int
+
+
+class RecommendationListResponse(BaseModel):
+    items: list[ProductRecommendation]
+    total: int
+    limit: int
+    offset: int
