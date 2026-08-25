@@ -1,0 +1,159 @@
+/* Dashboard 전용 레이아웃 스타일이며 POS를 포함한 다른 화면에
+   영향을 주지 않도록 이 파일 안에서만 관리한다. */
+
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  /* 현재 값은 docs 목업을 기준으로 Sidebar를 확인하기 위한 최소 색상이며,
+     Dashboard 컬러 토큰 단계에서 의미 기반 토큰으로 교체한다. */
+  --sidebar-bg-start: #085341;
+  --sidebar-bg-end: #043025;
+  --sidebar-text: #ffffff;
+  --sidebar-text-muted: #a9c9bd;
+  --sidebar-border: rgba(255, 255, 255, 0.16);
+  --sidebar-shadow: 6px 0 22px rgba(3, 58, 44, 0.14);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.18);
+  --sidebar-item-padding-x: 11px;
+  --sidebar-icon-size: 18px;
+  --sidebar-item-gap: 10px;
+
+  flex-shrink: 0;
+  width: 240px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px 20px;
+  background: linear-gradient(
+    165deg,
+    var(--sidebar-bg-start) 0%,
+    var(--sidebar-bg-end) 100%
+  );
+  color: var(--sidebar-text);
+  box-shadow: var(--sidebar-shadow);
+}
+
+.logoArea {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.logoImage {
+  display: block;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 독립 메뉴 · 그룹 레이블 · 그룹 내부 메뉴의 간격을 각각 다른 값으로 둔다.
+   레이블은 margin-top으로 이전 항목과 충분히 떨어뜨리고, margin-bottom으로
+   그룹 첫 항목과의 간격을 좁힌다. 그룹 내부 항목끼리는 margin-top을 최소로 둬
+   조밀하게 붙인다(마진 상쇄로 레이블 바로 다음 항목은 레이블 쪽 값을 따른다). */
+.navList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navList > li:first-child {
+  margin-top: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--sidebar-item-gap);
+  min-height: 40px;
+  margin-top: 2px;
+  padding: 9px var(--sidebar-item-padding-x);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sidebar-text-muted);
+}
+
+.navItem[data-active='true'] {
+  color: var(--sidebar-text);
+  background: var(--sidebar-active-bg);
+}
+
+.navSectionLabel {
+  margin: 28px 4px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--sidebar-text-muted);
+}
+
+.navIcon {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+}
+
+/* outline/filled 두 아이콘을 같은 자리에 겹쳐 두고 opacity로만 전환한다.
+   전환에 관계없이 아이콘 영역 크기가 고정되어 메뉴 레이아웃이 움직이지 않는다. */
+.iconOutline,
+.iconFilled {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.iconFilled {
+  opacity: 0;
+}
+
+.navItem[data-active='true'] .iconOutline {
+  opacity: 0;
+}
+
+.navItem[data-active='true'] .iconFilled {
+  opacity: 1;
+}
+
+.sidebarBottom {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+/* storeName/managerName의 왼쪽 시작점을 메뉴 라벨 텍스트 시작점과 맞춘다
+   (항목 padding-left + 아이콘 폭 + 아이콘-텍스트 gap). */
+.storeInfo {
+  margin-top: 10px;
+  padding: 12px 0 2px
+    calc(
+      var(--sidebar-item-padding-x) + var(--sidebar-icon-size) +
+        var(--sidebar-item-gap)
+    );
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.storeName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--sidebar-text);
+}
+
+.managerName {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--sidebar-text-muted);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
