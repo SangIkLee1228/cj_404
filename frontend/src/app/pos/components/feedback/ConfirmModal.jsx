@@ -9,6 +9,7 @@ export default function ConfirmModal({
   title,
   description,
   confirmLabel,
+  cancelLabel = '돌아가기',
   onConfirm,
   onCancel,
 }) {
@@ -33,7 +34,7 @@ export default function ConfirmModal({
         </div>
         <div className={styles.modalActions}>
           <button type="button" className={styles.cancel} onClick={onCancel}>
-            돌아가기
+            {cancelLabel}
           </button>
           <button type="button" className={styles.confirm} onClick={onConfirm}>
             {confirmLabel}

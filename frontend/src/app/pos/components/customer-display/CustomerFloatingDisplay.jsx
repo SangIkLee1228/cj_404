@@ -65,16 +65,18 @@ export default function CustomerFloatingDisplay({ pos }) {
     : membership.memberConfirmed
       ? 'CJ ONE 확인 완료'
       : state.capture.hasCaptured
-        ? 'AI 인식/상품 확인'
+        ? '담긴 상품 확인'
         : '상품 확인';
 
   const actionText = payment.paid
     ? membership.memberConfirmed
       ? 'CJ ONE 적립·결제가 완료되었습니다'
       : '결제가 완료되었습니다'
-    : membership.memberConfirmed
-      ? '포인트 적립 예정 · 결제 대기'
-      : '결제 대기';
+    : payment.failed
+      ? '재시도 중'
+      : membership.memberConfirmed
+        ? '포인트 적립 예정 · 결제 대기'
+        : '결제 대기';
 
   return (
     <div
@@ -228,6 +230,7 @@ export default function CustomerFloatingDisplay({ pos }) {
         <div className={`${styles.customerOverlay} ${styles.open}`}>
           <PhoneKeypad
             phone={membership.phone}
+            lookupFailed={membership.lookupFailed}
             onKey={pos.phoneKey}
             onCancel={pos.cancelPhone}
             onConfirm={pos.confirmPhone}

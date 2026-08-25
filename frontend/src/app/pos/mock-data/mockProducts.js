@@ -111,6 +111,13 @@ export const MOCK_INVENTORY_BY_NAME = {
   '크림치즈 베이글': 5,
 };
 
+/**
+ * CJ ONE 조회 실패 Mock 케이스 — 미등록 회원 시뮬레이션 전용 데모 번호.
+ * 실제 회원 조회 API가 없으므로, 이 번호를 입력했을 때만 "조회 실패" 상태를
+ * 재현한다(개발자용 테스트 버튼을 UI에 두지 않기 위한 최소한의 장치).
+ */
+export const MOCK_UNREGISTERED_PHONE = '01000000000';
+
 /** Mock 금일 판매 수량 — "오늘의 인기 상품 TOP3" 산출에 사용한다. */
 export const MOCK_SOLD_TODAY_BY_NAME = {
   '카망베르 치즈빵': 42,
@@ -123,7 +130,13 @@ export const MOCK_SOLD_TODAY_BY_NAME = {
   마늘바게트: 9,
 };
 
-/** 기본 촬영 AI 인식 Mock 결과 */
+/**
+ * 기본 촬영 AI 인식 Mock 결과.
+ * belowThreshold: 실제 연동 시 backend가 계산해 내려주는 boolean(백엔드
+ * scan 스키마의 is_below_threshold와 동일 계약)을 흉내낸 값이다. 프론트에서
+ * confidence 숫자로 임계값을 임의 판정하지 않고, 이미 계산된 결과만 받는다는
+ * 전제를 목업에서도 그대로 유지한다.
+ */
 export const MOCK_BASIC_CAPTURE = [
   {
     name: '카망베르 치즈빵',
@@ -131,9 +144,24 @@ export const MOCK_BASIC_CAPTURE = [
     qty: 1,
     confidence: 98,
     source: 'ai',
+    belowThreshold: false,
   },
-  { name: '소금빵', price: 2200, qty: 2, confidence: 96, source: 'ai' },
-  { name: '초코 크루아상', price: 3500, qty: 1, confidence: 94, source: 'ai' },
+  {
+    name: '소금빵',
+    price: 2200,
+    qty: 2,
+    confidence: 96,
+    source: 'ai',
+    belowThreshold: false,
+  },
+  {
+    name: '초코 크루아상',
+    price: 3500,
+    qty: 1,
+    confidence: 94,
+    source: 'ai',
+    belowThreshold: true,
+  },
 ];
 
 /** 추가 촬영 AI 인식 Mock 결과 — 기존 계산 항목은 유지하고 이 결과만 누적한다. */

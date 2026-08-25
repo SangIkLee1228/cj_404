@@ -14,6 +14,7 @@ import {
   MOCK_INVENTORY_BY_NAME,
   MOCK_RETAKE_CAPTURE,
   MOCK_SOLD_TODAY_BY_NAME,
+  MOCK_UNREGISTERED_PHONE,
   findProductByName,
 } from '../mock-data/mockProducts';
 import { resolveRemaining } from '../sync/posSync';
@@ -23,15 +24,20 @@ import { computePoints } from '../helpers/formatters';
 const MEMBER_NAME = '정우현';
 
 const initialState = {
-  cart: [], // { name, price, qty, source: 'ai'|'manual'|'mixed', confidence, emoji, productId }
+  cart: [], // { name, price, qty, source: 'ai'|'manual'|'mixed', confidence, emoji, productId, belowThreshold }
   capture: {
     hasCaptured: false,
     mode: 'basic',
     screen: 'recognition',
     scanStartedAt: null,
   }, // screen: 'recognition' | 'shooting'
-  membership: { phone: '010', memberConfirmed: false, phoneOverlayOpen: false },
-  payment: { paid: false },
+  membership: {
+    phone: '010',
+    memberConfirmed: false,
+    phoneOverlayOpen: false,
+    lookupFailed: false,
+  },
+  payment: { paid: false, failed: false },
   catalogFilter: { productType: 'bread', category: '전체' },
   inventoryOverrides: {}, // name -> remainingQty (대시보드 동기화가 없을 때만 쓰는 로컬 폴백)
   managerState: null, // 점장 대시보드 동기화 상태(sync adapter가 채워 넣는다)
@@ -96,6 +102,7 @@ function resetMembershipFields(state) {
     phone: '010',
     memberConfirmed: false,
     phoneOverlayOpen: false,
+    lookupFailed: false,
   };
 }
 
@@ -230,6 +237,7 @@ function reducer(state, action) {
           scanStartedAt: null,
         },
         membership: resetMembershipFields(state),
+        payment: { paid: false, failed: false },
         correctionCount: 0,
       };
     }
@@ -259,23 +267,39 @@ function reducer(state, action) {
       } else if (phone.length < 11) {
         phone += key;
       }
-      return { ...state, membership: { ...state.membership, phone } };
+      return {
+        ...state,
+        membership: { ...state.membership, phone, lookupFailed: false },
+      };
     }
 
     case 'CANCEL_PHONE':
       return {
         ...state,
-        membership: { ...state.membership, phoneOverlayOpen: false },
+        membership: {
+          ...state.membership,
+          phoneOverlayOpen: false,
+          lookupFailed: false,
+          phone: '010',
+        },
       };
 
     case 'CONFIRM_PHONE': {
       if (state.membership.phone.length !== 11) return state;
+      // 미등록 회원(Mock) — 조회 실패와 미입력/건너뛰기(정상 경로)를 구분한다.
+      if (state.membership.phone === MOCK_UNREGISTERED_PHONE) {
+        return {
+          ...state,
+          membership: { ...state.membership, lookupFailed: true, phone: '010' },
+        };
+      }
       return {
         ...state,
         membership: {
           ...state.membership,
           memberConfirmed: true,
           phoneOverlayOpen: false,
+          lookupFailed: false,
         },
       };
     }
@@ -318,7 +342,7 @@ function reducer(state, action) {
       return {
         ...state,
         inventoryOverrides,
-        payment: { paid: true },
+        payment: { paid: true, failed: false },
         _stockWarning: null,
         _pendingOrder: {
           cartItems: state.cart.map((item) => ({ ...item })),
@@ -334,6 +358,14 @@ function reducer(state, action) {
     case 'CLEAR_PENDING_ORDER':
       return { ...state, _pendingOrder: null };
 
+    // 결제망 미연동 상태에서 실패 UI/복구 흐름을 검증하기 위한 결정론적 테스트 전용
+    // 경로. 정상 사용자 결제 경로에서는 절대 자동 호출되지 않는다 — window 전역
+    // 훅(dev 빌드에서만 노출)을 통해 브라우저 테스트가 명시적으로 호출할 때만 실행된다.
+    case 'DEV_FORCE_PAYMENT_FAILURE': {
+      if (state.cart.length === 0 || state.payment.paid) return state;
+      return { ...state, payment: { paid: false, failed: true } };
+    }
+
     case 'NEW_ORDER':
       return {
         ...state,
@@ -345,7 +377,7 @@ function reducer(state, action) {
           scanStartedAt: null,
         },
         membership: resetMembershipFields(state),
-        payment: { paid: false },
+        payment: { paid: false, failed: false },
         correctionCount: 0,
       };
 
@@ -412,6 +444,18 @@ export function usePosState() {
     posSync.commitOrder(state._pendingOrder);
     dispatch({ type: 'CLEAR_PENDING_ORDER' });
   }, [state._pendingOrder, posSync]);
+
+  // 결제 실패 UI/복구 흐름을 브라우저 테스트에서 결정론적으로 재현하기 위한 훅.
+  // 프로덕션 빌드에는 포함하지 않는다 — 정상 결제 경로에는 어떤 영향도 주지 않는다.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (process.env.NODE_ENV === 'production') return;
+    window.__posForcePaymentFailure = () =>
+      dispatch({ type: 'DEV_FORCE_PAYMENT_FAILURE' });
+    return () => {
+      delete window.__posForcePaymentFailure;
+    };
+  }, []);
 
   const remainingOf = useCallback(
     (name) =>
@@ -526,10 +570,6 @@ export function usePosState() {
     (mode) => dispatch({ type: 'OPEN_CAPTURE_SCREEN', mode }),
     []
   );
-  const closeCaptureScreen = useCallback(
-    () => dispatch({ type: 'CLOSE_CAPTURE_SCREEN' }),
-    []
-  );
   const setCatalogType = useCallback(
     (productType) => dispatch({ type: 'SET_CATALOG_TYPE', productType }),
     []
@@ -539,18 +579,52 @@ export function usePosState() {
     []
   );
 
+  const removeItem = useCallback(
+    (name) => {
+      const item = state.cart.find((x) => x.name === name);
+      if (!item) return;
+      dispatch({ type: 'CHANGE_QTY', name, delta: -item.qty });
+    },
+    [state.cart]
+  );
+
+  // 촬영 처리(Mock)에는 타임아웃이 없다 — 진행 중 화면을 벗어나면 반드시 여기서
+  // clearTimeout으로 취소해, 이미 떠난 뒤에 결과가 뒤늦게 Cart에 반영되는(stale
+  // callback) 상황을 막는다.
   const shootingRef = useRef(false);
+  const shootTimeoutRef = useRef(null);
   const [isShooting, setIsShooting] = useState(false);
   const shoot = useCallback(() => {
     if (shootingRef.current) return;
     shootingRef.current = true;
     setIsShooting(true);
-    setTimeout(() => {
+    shootTimeoutRef.current = setTimeout(() => {
+      shootTimeoutRef.current = null;
       applyCapture(state.capture.mode);
       shootingRef.current = false;
       setIsShooting(false);
     }, 650);
   }, [applyCapture, state.capture.mode]);
+
+  const cancelShoot = useCallback(() => {
+    if (shootTimeoutRef.current) {
+      clearTimeout(shootTimeoutRef.current);
+      shootTimeoutRef.current = null;
+    }
+    shootingRef.current = false;
+    setIsShooting(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shootTimeoutRef.current) clearTimeout(shootTimeoutRef.current);
+    };
+  }, []);
+
+  const closeCaptureScreen = useCallback(() => {
+    cancelShoot();
+    dispatch({ type: 'CLOSE_CAPTURE_SCREEN' });
+  }, [cancelShoot]);
 
   return {
     state,
@@ -581,5 +655,6 @@ export function usePosState() {
     setCatalogCategory,
     shoot,
     isShooting,
+    removeItem,
   };
 }

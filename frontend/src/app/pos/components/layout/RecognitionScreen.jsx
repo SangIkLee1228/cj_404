@@ -10,6 +10,7 @@ export default function RecognitionScreen({
   pos,
   onRequestRetake,
   onRequestCancel,
+  onRequestPayment,
 }) {
   const { state, activeCart, totalCount, totalAmount, points, memberName } =
     pos;
@@ -28,8 +29,24 @@ export default function RecognitionScreen({
           items={activeCart}
           remainingOf={pos.remainingOf}
           onChangeQty={pos.changeQty}
+          onDelete={pos.removeItem}
         />
         <div className={styles.bottomActions}>
+          {state.payment.failed && (
+            <div className={styles.paymentFailBanner}>
+              <span>
+                결제가 승인되지 않았습니다. 다시 시도하거나 계산을 취소하세요.
+              </span>
+              <div className={styles.paymentFailActions}>
+                <button type="button" onClick={pos.pay}>
+                  재결제
+                </button>
+                <button type="button" onClick={onRequestCancel}>
+                  계산 취소
+                </button>
+              </div>
+            </div>
+          )}
           <MembershipPanel
             cartEmpty={activeCart.length === 0}
             paid={state.payment.paid}
@@ -44,7 +61,7 @@ export default function RecognitionScreen({
             totalAmount={totalAmount}
             paid={state.payment.paid}
             cartEmpty={activeCart.length === 0}
-            onPay={pos.pay}
+            onPay={onRequestPayment}
             onNewOrder={pos.newOrder}
           />
         </div>

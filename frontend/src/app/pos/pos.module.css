@@ -259,12 +259,37 @@
 }
 .scanRow {
   display: grid;
-  grid-template-columns: 30px 1fr auto auto auto auto;
+  grid-template-columns: 30px 1fr auto auto auto auto auto;
   align-items: center;
   gap: 7px;
-  padding: 5px 4px;
-  min-height: 42px;
+  padding: 5px 8px;
+  min-height: 72px;
   border-bottom: 1px solid #e9ded1;
+  position: relative;
+}
+/* 확인 필요 항목(임계값 이하 인식) — 색 + 텍스트 배지 + 좌측 바 3중 표시. 신뢰도 %는 노출하지 않는다. */
+.reviewRow {
+  padding-left: 14px;
+}
+.reviewBar {
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 3px;
+  background: #b94439;
+}
+.reviewBadge {
+  display: inline-flex;
+  margin-left: 5px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fce7e4;
+  color: #b94439;
+  font-size: 8px;
+  font-weight: 800;
+  vertical-align: 1px;
 }
 .scanIcon {
   width: 26px;
@@ -288,24 +313,41 @@
   margin-top: 1px;
 }
 .qtyBtn {
-  width: 27px;
-  height: 27px;
+  width: 56px;
+  height: 56px;
   border: 1px solid #d9cec1;
   border-radius: 50%;
   background: white;
   cursor: pointer;
+  font-size: 15px;
+  flex: none;
 }
 .qty {
-  width: 17px;
+  width: 20px;
   text-align: center;
   font-weight: 800;
-  font-size: 11px;
+  font-size: 12px;
 }
 .scanPrice {
   font-size: 11px;
   font-weight: 700;
   min-width: 55px;
   text-align: right;
+}
+.deleteBtn {
+  width: 56px;
+  height: 56px;
+  border: 1px solid #e4c9c3;
+  border-radius: 50%;
+  background: #fffaf8;
+  color: #8a3e35;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  flex: none;
+}
+.deleteBtn:hover {
+  background: #fff0ec;
 }
 .sourceBadge {
   display: inline-flex;
@@ -390,6 +432,36 @@
 }
 .payBtn:hover {
   background: #0b4e3e;
+}
+.paymentFailBanner {
+  background: #fce7e4;
+  border: 1px solid #e4c9c3;
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #8a3e35;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.paymentFailActions {
+  display: flex;
+  gap: 8px;
+}
+.paymentFailActions button {
+  flex: 1;
+  height: 38px;
+  border: 1px solid #e4c9c3;
+  border-radius: 10px;
+  background: #fff;
+  color: #8a3e35;
+  font-weight: 800;
+  font-size: 11px;
+  cursor: pointer;
+}
+.paymentFailActions button:hover {
+  background: #fff0ec;
 }
 .statusStrip {
   background: #d9f3e8;
@@ -947,6 +1019,13 @@
   color: #857a70;
   margin: -7px 0 12px;
 }
+.phoneError {
+  text-align: center;
+  font-size: 10px;
+  color: #b94439;
+  margin: -7px 0 12px;
+  font-weight: 700;
+}
 .phoneInput {
   height: 46px;
   background: #f5e9dc;
@@ -1476,8 +1555,8 @@
     flex-basis: 190px;
   }
   .scanRow {
-    min-height: 39px;
-    padding: 4px;
+    min-height: 72px;
+    padding: 5px 8px;
   }
 }
 

@@ -7,7 +7,12 @@ const SOURCE_LABEL = {
   mixed: 'AI + 직원',
 };
 
-export default function CartList({ items, remainingOf, onChangeQty }) {
+export default function CartList({
+  items,
+  remainingOf,
+  onChangeQty,
+  onDelete,
+}) {
   if (items.length === 0) {
     return (
       <div className={styles.scanList}>
@@ -27,7 +32,14 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
         const remaining = remainingOf(item.name);
         const plusDisabled = remaining !== Infinity && item.qty >= remaining;
         return (
-          <div className={styles.scanRow} key={item.name}>
+          <div
+            className={`${styles.scanRow} ${item.belowThreshold ? styles.reviewRow : ''}`}
+            key={item.name}
+            data-cart-item={item.name}
+          >
+            {item.belowThreshold && (
+              <div className={styles.reviewBar} aria-hidden="true" />
+            )}
             <div className={styles.scanIcon}>▣</div>
             <div>
               <div className={styles.scanName}>
@@ -35,6 +47,9 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
                 <span className={styles.sourceBadge}>
                   {SOURCE_LABEL[item.source]}
                 </span>
+                {item.belowThreshold && (
+                  <span className={styles.reviewBadge}>확인 필요</span>
+                )}
               </div>
               <div className={styles.scanSub}>
                 {formatWon(item.price)}
@@ -62,6 +77,14 @@ export default function CartList({ items, remainingOf, onChangeQty }) {
             <div className={styles.scanPrice}>
               {formatWon(item.price * item.qty)}
             </div>
+            <button
+              type="button"
+              className={styles.deleteBtn}
+              onClick={() => onDelete(item.name)}
+              aria-label={`${item.name} 삭제`}
+            >
+              ×
+            </button>
           </div>
         );
       })}
