@@ -17,7 +17,9 @@ import structlog  # 기존 코드가 쓰는 로거. print/logging 대신 통일
 from fastapi import HTTPException, status
 
 from app.core.deps import StaffContext
+from app.core.masking import mask_name
 from app.core.supabase_client import get_supabase
+from app.schemas.orders import OrderDetail, OrderItemRead, OrderMemberSummary
 
 logger = structlog.get_logger("app.services.orders")
 #        ^ 이름을 모듈 경로로 주면 로그에서 어디서 났는지 바로 보인다.
@@ -202,3 +204,137 @@ def load_grade_rates(applied_grade_id: int | None) -> tuple[Decimal, Decimal]:
         Decimal(str(rows[0]["discount_rate"])),
         Decimal(str(rows[0]["point_earn_rate"])),
     )
+
+
+ORDER_STATUS_LABEL = {
+    "PAID": "결제 완료된",
+    "CANCELLED": "취소된",
+    "PAYING": "결제 진행 중인",
+}
+
+_ORDER_SELECT = "*, member(member_id, name, membership_grade(grade_code, grade_name))"
+
+
+def load_order(order_id: int, staff: StaffContext) -> dict:
+    '''
+    주문 1 건을 읽고 접근 권한을 확인한다.
+    없으면 404, 다른 매장 주문이면 403.
+    모든 주문 API 가 가장 먼저 부르는 함수다 - 여기를 통과한 order 는 '존재하고, 이 직원이 손대도 되는 주문' 이 보장된다.
+    '''
+    rows = (
+        get_superbase()
+        .table("orders")
+        .select("*, member(member_id, name, membership_grade(grade_code, grade_name))")
+        .eq("order_id", order_id)
+        .limit(1)
+        .execute()
+    ).data
+
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "주문을 찾을 수 없습니다.")
+
+    order = rows[0]
+    if order["store_id"] != staff.store_id:
+        # store_id 는 url 이 아니라 인증 컨텍스트에서만 온다 (core/deps.py 규약)
+        logger.warning(
+            "order.cross_store_access",
+            order_id=order_id,
+            staff_id=staff.staff_id,
+            staff_store_id=staff.store_id,
+            order_store_id=order["store_id"],
+        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "다른 매장의 주문입니다.")
+
+    return order
+
+
+def ensure_pending(order: dict) -> None:
+    '''
+    항목 / 할인 / 회원을 건드릴 수 있는 상태인지 확인한다. 아니면 409.
+    상태 기계에서 PENDING 밖으로 나간 주문은 되돌릴 수 없다 (명세서 3장).
+    '''
+    if order["status"] != "PENDING":
+        label = ORDER_STATUS_LABEL.get(order["status"], order["status"])
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"{label} 주문은 수정할 수 없습니다.")
+
+
+def _embedded(value: object) -> dict | None:
+    '''
+    PostgREST 임베드 결과를 dict로 정규화한다.
+
+    1:1 관계여도 관계 정의에 따라 [{...}] 리스트로 올 때가 있다.
+    routes/members.py의 _flatten도 같은 방어를 하고 있다 - 실제로 겪은 문제라는 뜻이다.
+    '''
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value if isinstance(value, dict) else None
+
+
+def order_detail(order: dict, items: list[dict]) -> OrderDetail:
+    '''
+    주문 상세 응답을 조립한다 (API명세서 4.5).
+
+    DB를 타지 않는다. 라우트가 load_order / recalculate로 받아온 데이터를 넘기면
+    모양만 만든다. 덕분에 dict만으로 테스트할 수 있다.
+    '''
+    member_row = _embedded(order.get("member"))
+    grade_row = _embedded(member_row.get(
+        "membership_grade")) if member_row else None
+
+    return OrderDetail(
+        order_id=order["order_id"],
+        status=order["status"],
+        ordered_at=order["ordered_at"],
+        paid_at=order["paid_at"],
+        payment_method=order["payment_method"],
+        gross_amount=money(order["gross_amount"]),
+        membership_discount_amount=money(order["membership_discount_amount"]),
+        manual_discount_amount=money(order["manual_discount_amount"]),
+        discount_amount=money(order["discount_amount"]),
+        total_amount=money(order["total_amount"]),
+        member=None
+        if member_row is None
+        else OrderMemberSummary(
+            member_id=member_row["member_id"],
+            name=mask_name(member_row["name"]),
+            grade_code=grade_row["grade_code"] if grade_row else None,
+        ),
+        point_earned=order["point_earned"],
+        point_used=order["point_used"],
+        correction_count=0,  # CORRECTION_LOG는 2차 (명세서 4.5)
+        items=[
+            OrderItemRead(
+                order_item_id=row["order_item_id"],
+                product_id=row["product_id"],
+                product_name=(_embedded(row.get("product"))
+                              or {}).get("product_name"),
+                quantity=row["quantity"],
+                unit_price=money(row["unit_price"]),
+                subtotal=money(row["subtotal"]),
+                source_type=row["source_type"],
+                # TODO: recognize 구현 시 detected_item과 연결 (결정 C)
+                needs_review=False,
+            )
+            for row in items
+        ],
+    )
+
+
+def load_current_order(staff: StaffContext) -> dict | None:
+    """이 직원의 가장 최근 PENDING 주문. 없으면 None.
+
+    새로고침이나 화면 왕복(S-05) 후 계산을 이어가기 위한 세션 복구용이다 (명세서 4.5).
+    """
+    rows = (
+        get_supabase()
+        .table("orders")
+        .select(_ORDER_SELECT)
+        .eq("store_id", staff.store_id)
+        .eq("staff_id", staff.staff_id)
+        .eq("status", "PENDING")
+        .order("ordered_at", desc=True)
+        .limit(1)
+        .execute()
+    ).data
+    return rows[0] if rows else None

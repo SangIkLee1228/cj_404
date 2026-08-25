@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.schemas.codes import OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
+from app.schemas.codes import MembershipGradeCode, OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
 
 
 class Order(BaseModel):
@@ -60,3 +60,42 @@ class PointTransaction(BaseModel):
     point_rate: Decimal | None = None
     balance_after: int
     created_at: datetime
+
+
+class OrderMemberSummary (BaseModel):
+    ''' 주문에 연결된 회원 요약. 이름은 서버가 마스킹해 내보낸다. '''
+    member_id: int
+    name: str
+    grade_code: MembershipGradeCode | None
+
+
+class OrderItemRead(BaseModel):
+    ''' GET /orders/{id} 의 items 원소 (API 명세서 4.5) '''
+    order_item_id: int
+    product_id: int
+    product_name: str | None = None
+    quantity: int
+    unit_price: int
+    subtotal: int
+    source_type: OrderItemSourceType
+    needs_review: bool = False
+
+
+class OrderDetail(BaseModel):
+    '''주문 상세. GET /orders/{id} 와 항목 CRUD 3종이 모두 이 모양을 반환한다.'''
+
+    order_id: int
+    status: OrderStatus
+    ordered_at: datetime
+    paid_at: datetime | None = None
+    payment_method: PaymentMethod | None = None
+    gross_amount: int
+    membership_discount_amount: int
+    manual_discount_amount: int
+    discount_amount: int
+    total_amount: int
+    member: OrderMemberSummary | None = None
+    point_earned: int
+    point_used: int
+    correction_count: int = 0
+    items: list[OrderItemRead]

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.routes.products import CATALOG_FIELDS
+from app.main import app
 
 
 def test_is_active_is_not_written_to_the_shared_catalog():

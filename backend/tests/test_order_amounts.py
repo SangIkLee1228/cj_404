@@ -7,7 +7,7 @@
 import math  # float의 실제 동작을 대조하는 테스트에서만 쓴다
 from decimal import Decimal
 
-from app.services.orders import Amounts, compute_amounts, line_subtotal, money
+from app.services.orders import Amounts, compute_amounts, line_subtotal, money, order_detail
 
 #    └ pyproject.toml의 pythonpath = ["."] 덕분에 backend/ 기준 절대경로로 import된다.
 #      pytest가 tests/ 안에서 실행돼도 app 패키지를 찾는 이유.
@@ -149,3 +149,54 @@ def test_as_order_columns_covers_every_amount_column():
         "point_earned": 0,
     }
 #   └ UPDATE에 넘길 dict의 키 이름을 통째로 고정. 오타가 나면 즉시 실패한다.
+
+
+# ------------------ 08.25 ---------------------
+def _order_row(**overrides):
+    row = {
+        "order_id": 120, "status": "PENDING", "ordered_at": "2026-08-25T09:12:30+00:00",
+        "paid_at": None, "payment_method": None,
+        "gross_amount": "11100.00", "membership_discount_amount": "111.00",
+        "manual_discount_amount": "0.00", "discount_amount": "111.00",
+        "total_amount": "10989.00", "point_earned": 54, "point_used": 0,
+        "member": None,
+    }
+    return {**row, **overrides}
+
+
+def test_order_detail_converts_decimal_strings_to_int():
+    detail = order_detail(_order_row(), [])
+    assert detail.gross_amount == 11100
+    assert detail.total_amount == 10989
+    assert detail.items == []
+
+
+def test_order_detail_masks_member_name():
+    """원본 이름이 응답에 절대 실리면 안 된다 (NFR-06)."""
+    order = _order_row(
+        member={"member_id": 7, "name": "한지원",
+                "membership_grade": {"grade_code": "FAMILY", "grade_name": "패밀리"}}
+    )
+    detail = order_detail(order, [])
+    assert detail.member.name == "한*원"
+    assert detail.member.grade_code == "FAMILY"
+
+
+def test_order_detail_handles_embedded_list_form():
+    """PostgREST가 1:1 관계를 리스트로 돌려줘도 깨지지 않아야 한다."""
+    order = _order_row(
+        member=[{"member_id": 7, "name": "한지원",
+                 "membership_grade": [{"grade_code": "VIP"}]}]
+    )
+    assert order_detail(order, []).member.grade_code == "VIP"
+
+
+def test_order_detail_flattens_item_product_name():
+    items = [{
+        "order_item_id": 501, "product_id": 10, "quantity": 2,
+        "unit_price": "3200.00", "subtotal": "6400.00",
+        "source_type": "AI_DETECTED", "product": {"product_name": "카망베르 치즈빵"},
+    }]
+    item = order_detail(_order_row(), items).items[0]
+    assert item.product_name == "카망베르 치즈빵"
+    assert item.subtotal == 6400

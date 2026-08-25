@@ -11,20 +11,20 @@ PostgREST의 임베디드 리소스 문법을 쓰며, `!inner`를 붙여야
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from postgrest.exceptions import APIError
 
 from app.core.deps import StaffContext, get_staff_context, require_manager
-from app.core.supabase_client import get_supabase
 from app.core.errors import ApiError
+from app.core.supabase_client import get_supabase
 from app.core.timeutil import resolve_period
 from app.schemas.common import (
     ProductCreate,
     ProductListResponse,
     ProductRead,
-    ProductRecommendation,        # 추가
+    ProductRecommendation,  # 추가
     ProductUpdate,
-    RecommendationListResponse,   # 추가
+    RecommendationListResponse,  # 추가
 )
-from postgrest.exceptions import APIError
 
 router = APIRouter(prefix="/products", tags=["products"])
 logger = structlog.get_logger("app.products")

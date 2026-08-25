@@ -1,14 +1,16 @@
 import structlog
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
+from app.schemas.orders import OrderDetail
+from app.services.orders import load_current_order, load_items, load_order, order_detail
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 logger = structlog.get_logger("app.orders")
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=OrderDetail)
 def create_order(staff: StaffContext = Depends(get_staff_context)):
     '''
     계산 시작 (FR-09)
@@ -31,7 +33,7 @@ def create_order(staff: StaffContext = Depends(get_staff_context)):
 
     for row in existing.data:
         if not row.get("order_item"):
-            return _shape(row)
+            return order_detail(load_order(row["order_id"], staff), [])
 
     created = (
         supabase.table("orders")
@@ -40,29 +42,24 @@ def create_order(staff: StaffContext = Depends(get_staff_context)):
     ).data[0]
 
     logger.info("order.created", order_id=created["order_id"])
-    return _shape(created)
+    return order_detail(load_order(created["order_id"], staff), [])
 
 
-def _shape(row: dict) -> dict:
-    return {
-        "order_id": row["order_id"],
-        "status": row["status"],
-        "gross_amount": int(round(float(row["gross_amount"]))),
-        "discount_amount": int(round(float(row["discount_amount"]))),
-        "total_amount": int(round(float(row["total_amount"]))),
-        "items": [],
-        "ordered_at": row["ordered_at"],
-    }
+@router.get(
+    "/current",
+    response_model=OrderDetail,
+    responses={204: {"description": "진행 중인 주문 없음"}},
+)
+def get_current_order(staff: StaffContext = Depends(get_staff_context)):
+    """진행 중인 주문 복구 (FR-09). 없으면 204."""
+    order = load_current_order(staff)
+    if order is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return order_detail(order, load_items(order["order_id"]))
 
 
-@router.get("")
-def get_orders():
-    '''
-    GET
-    /api/orders
-    판매 내역 목록
-    (FR-17)
-    '''
-    return {
-
-    }
+@router.get("/{order_id}", response_model=OrderDetail)
+def get_order(order_id: int, staff: StaffContext = Depends(get_staff_context)):
+    """주문 상세 (FR-17)."""
+    order = load_order(order_id, staff)
+    return order_detail(order, load_items(order_id))
