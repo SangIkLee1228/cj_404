@@ -134,26 +134,70 @@
   padding-top: 16px;
 }
 
+/* 알림 항목을 위·아래 border 사이 중앙에 둔다. border1(sidebarAlerts) →
+   14px → 알림 → 14px(storeInfo의 margin-top) → border2(storeInfo)로
+   위·아래 간격을 동일하게 맞춘다. */
+.sidebarAlerts {
+  padding-top: 14px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
 /* storeName/managerName의 왼쪽 시작점을 메뉴 아이콘 컨테이너의
    왼쪽 시작점(.navItem의 padding-left)과 맞춘다. */
 .storeInfo {
-  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
   padding: 16px var(--sidebar-item-padding-x) 4px;
   border-top: 1px solid var(--sidebar-border);
 }
 
+.storeInfoText {
+  min-width: 0;
+}
+
 .storeName {
   margin: 0;
+  overflow: hidden;
   font-size: 14px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--sidebar-text);
 }
 
 .managerName {
   margin: 4px 0 0;
+  overflow: hidden;
   font-size: 12.5px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--sidebar-text-muted);
+}
+
+.logoutButton {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text-muted);
+}
+
+.logoutButton:disabled {
+  cursor: not-allowed;
+}
+
+.logoutButtonIcon {
+  width: 16px;
+  height: 16px;
 }
 
 .main {
@@ -263,7 +307,11 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* overflow-x가 이미 hidden이라 x축 overscroll은 의미가 없다. y축만
+     명시해 콘텐츠가 짧아 실제로 넘칠 게 없을 때도 트랙패드의 탄성/바운스
+     스크롤 효과가 보이지 않게 한다(스크롤 체이닝 방지 목적의 기존
+     overscroll-behavior:contain과 역할이 겹쳐 하나로 정리). */
+  overscroll-behavior-y: none;
 }
 
 .page {

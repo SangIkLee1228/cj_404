@@ -1,5 +1,12 @@
 import Image from 'next/image';
-import { LayoutDashboard, Package, Tag, BarChart3, Bell } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Package,
+  Tag,
+  BarChart3,
+  Bell,
+  LogOut,
+} from 'lucide-react';
 import styles from '../dashboard-layout.module.css';
 
 // Lucide는 outline(stroke) 아이콘만 제공한다. 각 아이콘의 stroke 구조상
@@ -138,13 +145,26 @@ export default function DashboardSidebar() {
         </ul>
       </nav>
       <div className={styles.sidebarBottom}>
-        <div className={styles.navItem}>
-          <NavIcon Icon={Bell} FilledIcon={AlertIconFilled} />
-          <span>알림</span>
+        <div className={styles.sidebarAlerts}>
+          <div className={styles.navItem}>
+            <NavIcon Icon={Bell} FilledIcon={AlertIconFilled} />
+            <span>알림</span>
+          </div>
         </div>
         <div className={styles.storeInfo}>
-          <p className={styles.storeName}>{STORE_NAME}</p>
-          <p className={styles.managerName}>{MANAGER_NAME}</p>
+          <div className={styles.storeInfoText}>
+            <p className={styles.storeName}>{STORE_NAME}</p>
+            <p className={styles.managerName}>{MANAGER_NAME}</p>
+          </div>
+          {/* 아직 실제 로그아웃 기능이 없는 시각적 placeholder다. */}
+          <button
+            type="button"
+            className={styles.logoutButton}
+            aria-label="로그아웃"
+            disabled
+          >
+            <LogOut className={styles.logoutButtonIcon} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </aside>
