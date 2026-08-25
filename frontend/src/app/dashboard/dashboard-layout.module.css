@@ -21,6 +21,7 @@
   --sidebar-bg-end: #043025;
   --sidebar-text: #ffffff;
   --sidebar-text-muted: #a9c9bd;
+  --sidebar-group-text: #6fa895;
   --sidebar-border: rgba(255, 255, 255, 0.16);
   --sidebar-shadow: 6px 0 22px rgba(3, 58, 44, 0.14);
   --sidebar-active-bg: rgba(255, 255, 255, 0.18);
@@ -93,10 +94,10 @@
 
 .navSectionLabel {
   margin: 28px 4px 10px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: var(--sidebar-text-muted);
+  color: var(--sidebar-group-text);
 }
 
 .navIcon {
@@ -133,15 +134,11 @@
   padding-top: 16px;
 }
 
-/* storeName/managerName의 왼쪽 시작점을 메뉴 라벨 텍스트 시작점과 맞춘다
-   (항목 padding-left + 아이콘 폭 + 아이콘-텍스트 gap). */
+/* storeName/managerName의 왼쪽 시작점을 메뉴 아이콘 컨테이너의
+   왼쪽 시작점(.navItem의 padding-left)과 맞춘다. */
 .storeInfo {
   margin-top: 10px;
-  padding: 12px 0 2px
-    calc(
-      var(--sidebar-item-padding-x) + var(--sidebar-icon-size) +
-        var(--sidebar-item-gap)
-    );
+  padding: 16px var(--sidebar-item-padding-x) 4px;
   border-top: 1px solid var(--sidebar-border);
 }
 

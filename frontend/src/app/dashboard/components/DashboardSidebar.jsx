@@ -99,9 +99,10 @@ const NAV_ENTRIES = [
   },
 ];
 
-// API 연결 전 UI 확인용 placeholder이며, 실제 매장/담당자 데이터가 아니다.
-const STORE_NAME = '뚜레쥬르 매장';
-const MANAGER_NAME = '매장 관리자';
+// API 연결 전 Dashboard UI 확인용 목업 데이터다.
+// 실제 인증 또는 매장 데이터가 연결되면 교체 예정이다.
+const STORE_NAME = '뚜레쥬르 강남 직영점';
+const MANAGER_NAME = '김철수';
 
 export default function DashboardSidebar() {
   return (
