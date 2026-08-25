@@ -2,12 +2,16 @@
 // 변경하지 않는다.
 import styles from './dashboard-layout.module.css';
 import DashboardSidebar from './components/DashboardSidebar';
+import DashboardTopbar from './components/DashboardTopbar';
 
 export default function DashboardLayout({ children }) {
   return (
     <div className={styles.layout}>
       <DashboardSidebar />
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main}>
+        <DashboardTopbar />
+        <div className={styles.contentViewport}>{children}</div>
+      </main>
     </div>
   );
 }

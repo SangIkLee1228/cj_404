@@ -2,8 +2,15 @@
    영향을 주지 않도록 이 파일 안에서만 관리한다. */
 
 .layout {
+  /* position:fixed + inset:0으로 Dashboard Shell 전체를 viewport에 직접
+     고정한다. 이렇게 하면 body/document가 조금이라도 스크롤 가능해지는
+     경우(서브픽셀 오차, 스크롤 체이닝 등)에도 .layout 자체는 viewport에
+     못박혀 있어 Sidebar가 콘텐츠 스크롤과 함께 움직이지 않는다.
+     inset:0이 top/right/bottom/left를 모두 0으로 고정하므로 width/height는
+     별도로 선언하지 않는다(중복). */
+  position: fixed;
+  inset: 0;
   display: flex;
-  height: 100vh;
   overflow: hidden;
 }
 
@@ -23,7 +30,8 @@
 
   flex-shrink: 0;
   width: 240px;
-  height: 100vh;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 24px 20px 20px;
@@ -152,8 +160,150 @@
 }
 
 .main {
+  /* Dashboard 컬러 시스템 이전까지 Topbar·Page 설명 텍스트에 쓰는 최소 muted 값.
+     Main 배경(bg-slate-50)·텍스트(text-slate-900)와 어울리는 중립 회색이며
+     Sidebar 로컬 변수와는 독립적이다. Topbar와 PageHeader가 공유하는 값이라
+     둘의 공통 조상인 .main에서 한 번만 선언한다. */
+  --page-text-muted: #64748b;
+
   flex: 1;
   min-width: 0;
-  height: 100vh;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  --topbar-border: #e2e8f0;
+
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 64px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--topbar-border);
+}
+
+.topbarHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.topbarTitle {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.topbarSubtitle {
+  font-size: 11px;
+  color: var(--page-text-muted);
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.topbarStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--topbar-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--page-text-muted);
+}
+
+.topbarStatusDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.topbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--topbar-border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.topbarButtonIcon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.topbarButton:disabled {
+  color: var(--page-text-muted);
+  cursor: not-allowed;
+}
+
+.contentViewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.page {
+  padding: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pageHeaderMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pageHeaderActions {
+  flex: 0 0 auto;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pageDescription {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--page-text-muted);
+}
+
+.pageContent {
+  margin-top: 24px;
 }
