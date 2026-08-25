@@ -1,13 +1,19 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import styles from '../dashboard-layout.module.css';
+import { DASHBOARD_ROUTES, getDashboardRoute } from '../dashboard-routes';
 
-// 현재 메뉴 제목은 아직 라우팅과 연결돼 있지 않아 고정 문구다.
-// 라우팅이 연결되면 활성 메뉴 라벨을 그대로 가져와 표시한다.
 export default function DashboardTopbar() {
+  const pathname = usePathname();
+  const currentRoute = getDashboardRoute(pathname);
+  const title = currentRoute?.label ?? DASHBOARD_ROUTES.overview.label;
+
   return (
     <header className={styles.topbar}>
       <div className={styles.topbarHeading}>
-        <div className={styles.topbarTitle}>운영 현황</div>
+        <div className={styles.topbarTitle}>{title}</div>
         {/* 실시간 시계는 이후 단계에서 별도 Client Component로 분리해 연결한다.
             hydration 불일치를 피하기 위해 지금은 new Date를 직접 렌더링하지 않는다. */}
         <div className={styles.topbarSubtitle}>실시간 시각 연동 예정</div>

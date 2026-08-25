@@ -1,4 +1,8 @@
+'use client';
+
 import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Package,
@@ -8,6 +12,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import styles from '../dashboard-layout.module.css';
+import { DASHBOARD_ROUTES, isRouteActive } from '../dashboard-routes';
 
 // Lucide는 outline(stroke) 아이콘만 제공한다. 각 아이콘의 stroke 구조상
 // 자연스러운 filled 형태가 없어, 의미가 유지되는 선에서 직접 그린 단순한
@@ -63,8 +68,7 @@ function AlertIconFilled(props) {
 }
 
 // outline/filled 두 벌을 같은 자리에 겹쳐 두고 CSS([data-active] 선택자)로만
-// 표시 상태를 전환한다. 라우팅이 연결돼도 이 구조는 바뀌지 않고
-// li의 data-active 값만 바뀌면 된다.
+// 표시 상태를 전환한다. data-active 값만 바뀌면 아이콘도 함께 전환된다.
 function NavIcon({ Icon, FilledIcon }) {
   return (
     <span className={styles.navIcon} aria-hidden="true">
@@ -75,32 +79,29 @@ function NavIcon({ Icon, FilledIcon }) {
 }
 
 const NAV_ENTRIES = [
-  // active: true는 실제 라우팅 판별이 아니라, 목업 확인용 임시 시각 상태다.
-  // 이후 라우팅 단계에서 usePathname 기반 활성 상태로 교체한다.
   {
     type: 'item',
-    label: '운영 현황',
+    ...DASHBOARD_ROUTES.overview,
     Icon: LayoutDashboard,
     FilledIcon: OverviewIconFilled,
-    active: true,
   },
   { type: 'label', label: 'OPERATIONS' },
   {
     type: 'item',
-    label: '재고 관리',
+    ...DASHBOARD_ROUTES.inventory,
     Icon: Package,
     FilledIcon: InventoryIconFilled,
   },
   {
     type: 'item',
-    label: '상품 관리',
+    ...DASHBOARD_ROUTES.products,
     Icon: Tag,
     FilledIcon: ProductIconFilled,
   },
   { type: 'label', label: 'ANALYTICS' },
   {
     type: 'item',
-    label: '판매 통계',
+    ...DASHBOARD_ROUTES.sales,
     Icon: BarChart3,
     FilledIcon: SalesIconFilled,
   },
@@ -112,6 +113,9 @@ const STORE_NAME = '뚜레쥬르 강남 직영점';
 const MANAGER_NAME = '김철수';
 
 export default function DashboardSidebar() {
+  const pathname = usePathname();
+  const alertsActive = isRouteActive(pathname, DASHBOARD_ROUTES.alerts.href);
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.logoArea}>
@@ -126,30 +130,44 @@ export default function DashboardSidebar() {
       </div>
       <nav className={styles.nav} aria-label="대시보드 메뉴">
         <ul className={styles.navList}>
-          {NAV_ENTRIES.map((entry) =>
-            entry.type === 'label' ? (
-              <li key={entry.label} className={styles.navSectionLabel}>
-                {entry.label}
+          {NAV_ENTRIES.map((entry) => {
+            if (entry.type === 'label') {
+              return (
+                <li key={entry.label} className={styles.navSectionLabel}>
+                  {entry.label}
+                </li>
+              );
+            }
+
+            const active = isRouteActive(pathname, entry.href);
+
+            return (
+              <li key={entry.href}>
+                <Link
+                  href={entry.href}
+                  className={styles.navItem}
+                  data-active={active ? 'true' : undefined}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <NavIcon Icon={entry.Icon} FilledIcon={entry.FilledIcon} />
+                  <span>{entry.label}</span>
+                </Link>
               </li>
-            ) : (
-              <li
-                key={entry.label}
-                className={styles.navItem}
-                data-active={entry.active ? 'true' : undefined}
-              >
-                <NavIcon Icon={entry.Icon} FilledIcon={entry.FilledIcon} />
-                <span>{entry.label}</span>
-              </li>
-            )
-          )}
+            );
+          })}
         </ul>
       </nav>
       <div className={styles.sidebarBottom}>
         <div className={styles.sidebarAlerts}>
-          <div className={styles.navItem}>
+          <Link
+            href={DASHBOARD_ROUTES.alerts.href}
+            className={styles.navItem}
+            data-active={alertsActive ? 'true' : undefined}
+            aria-current={alertsActive ? 'page' : undefined}
+          >
             <NavIcon Icon={Bell} FilledIcon={AlertIconFilled} />
-            <span>알림</span>
-          </div>
+            <span>{DASHBOARD_ROUTES.alerts.label}</span>
+          </Link>
         </div>
         <div className={styles.storeInfo}>
           <div className={styles.storeInfoText}>

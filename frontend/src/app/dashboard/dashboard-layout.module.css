@@ -70,25 +70,48 @@
   list-style: none;
 }
 
+/* 그룹 레이블(li.navSectionLabel)은 자체 margin으로 간격을 책임지므로
+   제외하고, 메뉴 항목 li에만 조밀한 margin-top을 준다. */
+.navList > li:not(.navSectionLabel) {
+  margin-top: 2px;
+}
+
 .navList > li:first-child {
   margin-top: 0;
 }
 
+/* 메뉴 항목 전체 행이 Link(a)가 된다. 브라우저 기본 링크 스타일을
+   지우고 li 폭 전체를 채운다. */
 .navItem {
   display: flex;
+  box-sizing: border-box;
+  width: 100%;
   align-items: center;
   gap: var(--sidebar-item-gap);
   min-height: 40px;
-  margin-top: 2px;
   padding: 9px var(--sidebar-item-padding-x);
   border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
   color: var(--sidebar-text-muted);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--sidebar-text);
+  outline-offset: -2px;
 }
 
 .navItem[data-active='true'] {
   color: var(--sidebar-text);
+  background: var(--sidebar-active-bg);
+}
+
+.navItem[data-active='true']:hover {
   background: var(--sidebar-active-bg);
 }
 
