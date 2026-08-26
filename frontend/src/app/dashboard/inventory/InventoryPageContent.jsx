@@ -46,6 +46,7 @@ export default function InventoryPageContent() {
       <PageHeader
         title="재고 관리"
         description="현재 재고는 판매 완료 시 자동 차감됩니다. 재고 조정은 점장이 직접 반영할 수 있습니다."
+        className={styles.inventoryPageHeader}
         actions={
           <div className={styles.filters}>
             {/* 시각적 레이블은 각 SegmentedControl의 aria-label과 의미가

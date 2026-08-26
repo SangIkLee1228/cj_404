@@ -11,6 +11,29 @@
   gap: 7px;
 }
 
+/* 큰 화면 전용: PageHeader에 이 클래스가 함께 전달됐을 때만 제목/설명과
+   필터를 같은 행 하단 정렬로 바꾼다(다른 Dashboard 페이지는 className을
+   전달하지 않으므로 영향 없음). header.inventoryPageHeader는
+   .pageHeader(dashboard-layout.module.css, 단일 클래스)보다 명시도가 높은
+   엘리먼트+클래스 결합 선택자라, 두 CSS Module이 번들에 실리는 순서에
+   기대지 않고도 항상 이 규칙이 이긴다(!important 불필요).
+
+   breakpoint 1200px 근거: 목업 자체의 상위 breakpoint(1100px, 그 아래에서
+   사이드바가 240px→190px로 줄어듦)에 맞추되, 이 구현의 Sidebar는 항상
+   240px로 고정이라는 차이(+50px 여유)를 더해 잡았다. 이보다 좁으면 필터
+   한 줄의 최소 폭(라벨 + SegmentedControl 2조 + Select + 검색 input의
+   min-width 합)이 제목 영역을 지나치게 압박하므로 wrap으로 되돌아간다. */
+@media (min-width: 1200px) {
+  header.inventoryPageHeader {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+  }
+
+  header.inventoryPageHeader .filters {
+    flex-wrap: nowrap;
+  }
+}
+
 .filterGroupLabel {
   margin-right: 2px;
   font-size: 10px;
