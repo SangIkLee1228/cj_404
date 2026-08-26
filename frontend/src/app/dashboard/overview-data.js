@@ -29,6 +29,10 @@
 //                                        Chart view model
 //   10) mapDashboardOverviewToTopProductsChart — 응답 → 판매 상위 품목
 //                                        Doughnut Chart view model
+//   11) formatOverviewTimeLabel       — timezone 기준 "HH:MM" 시각 포맷
+//                                        (최근 판매 "시간" 열 전용)
+//   12) mapDashboardOverviewToRecentOrders — 응답 → 최근 판매 표 view
+//                                        model(최대 6건, API 순서 유지)
 import {
   OVERVIEW_MOCK_RESPONSES,
   OVERVIEW_MOCK_KPI_COMPARISONS,
@@ -308,4 +312,63 @@ export function mapDashboardOverviewToTopProductsChart(response) {
     total: overallTotal,
     items,
   };
+}
+
+// 최근 판매 표의 "시간" 열 전용 포맷("HH:MM"만). formatOverviewDateTime과
+// 같은 안전한 패턴(명시적 timeZone/locale, formatToParts로 직접 조립)을
+// 재사용하되, 날짜 없이 시:분만 필요한 이 화면 요구에 맞춰 별도로 둔다 —
+// 서버(SSR)와 클라이언트가 항상 같은 문자열을 만들어야 hydration
+// 불일치가 나지 않는다.
+export function formatOverviewTimeLabel(isoString, timezone) {
+  const date = new Date(isoString);
+  const formatter = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.hour}:${parts.minute}`;
+}
+
+const MAX_RECENT_ORDERS = 6;
+
+// response.recent_orders(실제 API 응답과 동일한 order_id/ordered_at/
+// item_summary/item_count/total_amount shape)를 최근 판매 표 view model로
+// 변환한다. 최대 6건까지만 쓰고, API가 준 순서를 다시 정렬하지 않는다 —
+// 최대 개수 제한은 이 함수가 담당하므로 화면에서 다시 slice/sort하지
+// 않아도 된다. response.timezone이 없거나 문자열이 아니면(비정상 응답)
+// 브라우저 로컬 timezone에 기대는 대신 이 Mock 전체가 쓰는 기준
+// timezone('Asia/Seoul')으로 안전하게 대체한다. 원본 response/
+// recent_orders 배열과 각 item은 mutate하지 않고, 화면 전용 필드를 원본
+// 객체에 다시 기록하지도 않는다(map으로 새 객체만 만든다).
+export function mapDashboardOverviewToRecentOrders(response) {
+  const recentOrders = Array.isArray(response?.recent_orders)
+    ? response.recent_orders
+    : [];
+  const timezone =
+    typeof response?.timezone === 'string' && response.timezone
+      ? response.timezone
+      : 'Asia/Seoul';
+
+  return recentOrders.slice(0, MAX_RECENT_ORDERS).map((order) => {
+    const itemCount = Number.isFinite(order?.item_count) ? order.item_count : 0;
+    const totalAmount = Number.isFinite(order?.total_amount)
+      ? order.total_amount
+      : 0;
+
+    return {
+      orderId: order?.order_id ?? null,
+      timeLabel: order?.ordered_at
+        ? formatOverviewTimeLabel(order.ordered_at, timezone)
+        : '',
+      itemSummary: order?.item_summary ?? '',
+      itemCount,
+      itemCountLabel: `${itemCount}개`,
+      totalAmount,
+      totalAmountLabel: formatWon(totalAmount),
+    };
+  });
 }

@@ -315,3 +315,78 @@
   font-weight: 800;
   text-align: right;
 }
+
+/* ---- 최근 판매(OV-3) ---- */
+
+/* 차트 그리드와 동일한 섹션 간격으로 아래에 배치한다(.chartGrid의
+   margin-top과 동일한 값 — 기존 섹션 간격 관례를 그대로 따름). */
+.recentOrdersCard {
+  margin-top: 12px;
+}
+
+/* 목업의 #recentOrders.recent-scroll(max-height:336px; overflow-y:auto)
+   의도를 그대로 반영한다 — 최대 6행이 넘칠 정도로 길어지지 않게 카드
+   내부에서만 세로 스크롤한다. 좁은 화면에서는 이 wrapper 자체가 가로
+   스크롤도 함께 담당해, 페이지 전체가 아니라 표 안에서만 스크롤되게
+   한다. */
+.recentTableWrapper {
+  max-height: 336px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.recentTable {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+}
+
+.recentTable th {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.recentTable td {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.recentTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 시간·수량·결제 금액은 불필요하게 줄바꿈되지 않게 하고, 상품 구성
+   열이 남는 가로 공간을 우선 차지하게 한다. */
+.recentTimeCell,
+.recentQtyCell,
+.recentAmountCell {
+  white-space: nowrap;
+}
+
+.recentProductCell {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recentAmount {
+  font-weight: 700;
+}
+
+.recentEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}

@@ -6,6 +6,7 @@ import SegmentedControl from './components/ui/SegmentedControl';
 import Card from './components/ui/Card';
 import OverviewSalesChart from './OverviewSalesChart';
 import OverviewTopProductsChart from './OverviewTopProductsChart';
+import OverviewRecentOrders from './OverviewRecentOrders';
 import dashboardLayoutStyles from './dashboard-layout.module.css';
 import styles from './overview.module.css';
 import {
@@ -18,6 +19,7 @@ import {
   getMockOverviewOrderCountSeries,
   mapDashboardOverviewToSalesChart,
   mapDashboardOverviewToTopProductsChart,
+  mapDashboardOverviewToRecentOrders,
 } from './overview-data';
 import { OVERVIEW_PERIOD_FILTER_OPTIONS } from './overview-mock-data';
 
@@ -116,6 +118,13 @@ export default function OverviewPageContent() {
   const topProductsChartData =
     mapDashboardOverviewToTopProductsChart(overviewResponse);
 
+  // 최근 판매도 같은 패턴이다 — response.recent_orders를 그대로 최대
+  // 6건까지만 옮기는 매핑은 overview-data.js에 맡기고, 여기서는 그
+  // 결과를 그대로 전달할 뿐 다시 정렬·제한하지 않는다. 별도의 최근 판매
+  // 전용 state는 두지 않는다 — 기간이 바뀌면 위에서 다시 조회한
+  // overviewResponse로부터 매 렌더링마다 새로 계산된다.
+  const recentOrders = mapDashboardOverviewToRecentOrders(overviewResponse);
+
   return (
     <section className={dashboardLayoutStyles.page}>
       <PageHeader
@@ -189,6 +198,10 @@ export default function OverviewPageContent() {
             </div>
           </Card>
         </div>
+        <OverviewRecentOrders
+          periodLabel={periodLabel}
+          recentOrders={recentOrders}
+        />
       </div>
     </section>
   );
