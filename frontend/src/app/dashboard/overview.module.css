@@ -189,6 +189,17 @@
   text-align: center;
 }
 
+/* 판매 상위 품목 카드 전용 chartBody. 목업(dashboard_mock.html)처럼
+   카드 헤더 아래 남은 세로 공간에서 도넛+범례 묶음이 중앙에 오도록,
+   이 chartBody만 flex:1로 남은 공간을 채우고 내부 콘텐츠를 세로
+   중앙 정렬한다. 왼쪽 Mixed Chart의 .chartBody(공유 클래스)는 그대로
+   두고 영향을 주지 않는다. */
+.doughnutChartBody {
+  display: flex;
+  flex: 1;
+  align-items: center;
+}
+
 /* 판매 상위 품목 Doughnut 레이아웃: 큰 화면은 canvas+legend를 가로로,
    좁은 화면은 세로로 쌓는다. */
 /* 판매 상위 품목 도넛 팔레트. frontend/docs/dashboard_mock.html의 판매
@@ -206,6 +217,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  width: 100%;
 }
 
 @media (max-width: 900px) {

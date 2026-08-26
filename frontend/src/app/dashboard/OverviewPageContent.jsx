@@ -181,7 +181,7 @@ export default function OverviewPageContent() {
                 {`${periodLabel} · 판매 수량 비중`}
               </span>
             </div>
-            <div className={styles.chartBody}>
+            <div className={`${styles.chartBody} ${styles.doughnutChartBody}`}>
               <OverviewTopProductsChart
                 periodLabel={periodLabel}
                 topProductsChartData={topProductsChartData}
