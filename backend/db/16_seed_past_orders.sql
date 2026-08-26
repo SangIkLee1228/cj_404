@@ -11,6 +11,12 @@
 -- 규모는 기존 시드의 오늘 하루치를 따른다 (DB설계서 v2.2 · 9-2의 "결정적·멱등" 원칙 유지):
 --   일 93건 · 건당 2.52줄 · 건당 4.02개 · 09:00~18:12 KST
 --
+-- 판매 분포: 상위 10종이 전체의 약 30%
+--   v1은 상품을 `% 상품수`로 균등하게 뽑아 121종이 거의 똑같이 팔렸다(1위 1.29%,
+--   기타 93.8%). 실제 빵집은 간판 상품에 판매가 몰리는데, 그 분포가 없으니 운영
+--   현황의 "판매 상위 품목" 도넛이 회색 기타 한 덩어리로만 보였다.
+--   -> 순위별 가중치를 준 확장 풀에서 뽑는다(아래 _pick).
+--
 -- 생성 범위: 회원 미연결 · 할인 없음 · PAID 고정.
 --   회원/포인트 경로는 오늘치 93건(회원 18건)이 이미 커버하고 있고, POINT_TRANSACTION의
 --   balance_after 러닝밸런스까지 맞추려면 member 캐시 정합성 과제(DB설계서 12장 #3)를
@@ -19,7 +25,11 @@
 create or replace function public.seed_past_orders(
   p_store_id      int default 1,
   p_days          int default 29,
-  p_orders_per_day int default 93
+  p_orders_per_day int default 93,
+  -- true면 대상 날짜의 기존 생성분을 지우고 다시 만든다. 분포를 바꿔 재생성할 때 쓴다.
+  -- 안전장치: 회원이 붙었거나 촬영 세션이 연결된 주문은 절대 지우지 않는다
+  -- (생성분은 전부 비회원이고 세션이 없다). 오늘 자는 루프 범위 밖이라 손대지 않는다.
+  p_regenerate    boolean default false
 )
 returns table (generated_days int, generated_orders bigint, generated_items bigint)
 language plpgsql
@@ -47,23 +57,58 @@ begin
   -- 상품 풀: 이 매장이 실제로 파는 것만. idx는 0-기반 연속 번호라 나머지연산으로 고를 수 있다.
   -- 커넥션 풀러가 세션을 재사용할 수 있어 on commit drop만 믿지 않고 먼저 지운다.
   drop table if exists _pool;
+  drop table if exists _pick;
+
+  -- 순위를 product_id 순이 아니라 해시 순으로 매긴다. 그냥 ID 순으로 하면 "번호가
+  -- 빠른 10종"이 베스트셀러가 돼 카테고리가 한쪽으로 쏠린다.
   create temp table _pool on commit drop as
   select sp.product_id, sp.price::numeric as price,
-         (row_number() over (order by sp.product_id) - 1)::int as idx
+         (row_number() over (order by (sp.product_id * 7919) % 1000, sp.product_id) - 1)::int as rnk
     from store_product sp
     join product p on p.product_id = sp.product_id
    where sp.store_id = p_store_id and sp.is_active and p.is_active;
 
-  select count(*) into v_n from _pool;
-  if v_n = 0 then
+  if not exists (select 1 from _pool) then
     raise exception '매장 %에 판매 중인 상품이 없습니다', p_store_id;
   end if;
+
+  -- 가중치만큼 슬롯을 복제한 확장 풀. 균등하게 뽑아도 인기 상품이 자주 걸린다.
+  --   1~10위 : 12 - 순위 (12,11,…,3) = 75슬롯
+  --   11~40위: 3                      = 90슬롯
+  --   41위~  : 1                      = 81슬롯 (121종 기준)
+  -- => 상위 10종이 75/246 = 30.5%, 1위가 12/246 = 4.9%
+  create temp table _pick on commit drop as
+  select (row_number() over (order by p.rnk, g) - 1)::int as idx, p.product_id, p.price
+    from _pool p,
+         lateral generate_series(
+           1, case when p.rnk < 10 then 12 - p.rnk when p.rnk < 40 then 3 else 1 end
+         ) g;
+
+  select count(*) into v_n from _pick;
 
   for v_k in 1 .. p_days loop
     v_day := v_today - v_k;
 
+    if p_regenerate then
+      -- 이 함수가 만든 것으로 보이는 주문만 지운다: 비회원 + 촬영 세션 없음.
+      -- 실제 시연으로 생긴 주문(회원 연결·촬영 이력)은 조건에 걸리지 않아 살아남는다.
+      delete from order_item oi
+       using orders o
+       where oi.order_id = o.order_id
+         and o.store_id = p_store_id and o.status = 'PAID'
+         and o.member_id is null
+         and (o.paid_at at time zone 'Asia/Seoul')::date = v_day
+         and not exists (select 1 from scan_session s where s.order_id = o.order_id);
+
+      delete from orders o
+       where o.store_id = p_store_id and o.status = 'PAID'
+         and o.member_id is null
+         and (o.paid_at at time zone 'Asia/Seoul')::date = v_day
+         and not exists (select 1 from scan_session s where s.order_id = o.order_id);
+    end if;
+
     -- 이미 그 날짜에 PAID 주문이 있으면 건너뛴다. 멱등이면서, 남이 만든 주문을
-    -- 지우지 않는다 - 이 스크립트는 절대 기존 ORDERS를 삭제하지 않는다.
+    -- 지우지 않는다.
     continue when exists (
       select 1 from orders o
        where o.store_id = p_store_id and o.status = 'PAID'
@@ -95,7 +140,7 @@ begin
              sum(r.qty)::smallint as quantity,
              (p.price * sum(r.qty)) as subtotal,
              min(r.source_type) as source_type
-        from raw r join _pool p on p.idx = r.pick
+        from raw r join _pick p on p.idx = r.pick
        group by r.seq, r.ordered_at, p.product_id, p.price
     ),
     agg as (
