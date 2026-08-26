@@ -19,6 +19,7 @@ from fastapi import HTTPException, status
 
 from app.core.deps import StaffContext
 from app.core.masking import mask_name
+from app.core.formatting import item_summary
 from app.core.supabase_client import get_supabase
 from app.schemas.orders import (
     OrderDetail,
@@ -555,19 +556,6 @@ ORDER_LIST_SELECT = (
     " total_amount, point_earned,"
     " order_item(quantity, product(product_name))"
 )
-
-
-def item_summary(product_names: list[str]) -> str:
-    """'카라멜 크림빵, 소금빵 외 1' 패턴 (명세서 4.5).
-
-    dashboard.py의 _item_summary와 같은 규칙이다. 같은 화면 언어를 두 곳이 쓰므로
-    나중에 core로 올려 공용화하는 편이 낫다.
-    """
-    if not product_names:
-        return ""
-    if len(product_names) <= 2:
-        return ", ".join(product_names)
-    return f"{', '.join(product_names[:2])} 외 {len(product_names) - 2}"
 
 
 def order_list_item(row: dict) -> OrderListItem:

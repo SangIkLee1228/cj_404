@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.routes.inventory import _baseline_map, _remaining_pct, _stock_status
 from app.core.deps import StaffContext, require_manager
+from app.core.formatting import item_summary
 from app.core.metrics import change_pct, share_pct
 from app.core.supabase_client import fetch_all, get_supabase
 from app.core.timeutil import DateRange, previous_period, resolve_period, to_kst
@@ -28,15 +29,6 @@ from app.schemas.dashboard import (
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = structlog.get_logger("app.dashboard")
-
-
-def _item_summary(product_names: list[str]) -> str:
-    """"카라멜 크림빵, 소금빵 외 1" 패턴 (API명세서 v1.3 · 4.5 예시와 동일 규칙)."""
-    if not product_names:
-        return ""
-    if len(product_names) <= 2:
-        return ", ".join(product_names)
-    return f"{', '.join(product_names[:2])} 외 {len(product_names) - 2}"
 
 
 def _low_stock(store_id: int, limit: int | None = None) -> tuple[list[LowStockItem], int]:
@@ -208,7 +200,7 @@ def get_overview(
         RecentOrder(
             order_id=o["order_id"],
             ordered_at=o["ordered_at"],
-            item_summary=_item_summary(
+            item_summary=item_summary(
                 [it["product"]["product_name"] for it in items_by_order.get(o["order_id"], [])]
             ),
             item_count=sum(it["quantity"] for it in items_by_order.get(o["order_id"], [])),

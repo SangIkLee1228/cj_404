@@ -81,7 +81,12 @@ def _baseline_map(store_id: int) -> dict[int, int]:
         .execute()
         .data
     )
-    return {r["product_id"]: r.get("stock_baseline_pct") or 20 for r in rows}
+    # `or 20`을 쓰면 baseline_pct=0("절대 알리지 마라")이 20으로 뒤집힌다.
+    # pay_order RPC는 coalesce라 0을 그대로 쓰므로, 그쪽과 어긋나지 않게 None만 대체한다.
+    return {
+        r["product_id"]: 20 if r.get("stock_baseline_pct") is None else r["stock_baseline_pct"]
+        for r in rows
+    }
 
 
 @router.get("", response_model=InventoryListResponse)

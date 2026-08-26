@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.errors import ApiError
-from app.core.supabase_client import get_supabase
+from app.core.supabase_client import fetch_all, get_supabase
 from app.core.timeutil import resolve_period
 from app.schemas.orders import (
     ManualDiscountRequest,
@@ -128,8 +128,13 @@ def list_orders(
         .execute()
     )
 
-    # summary는 페이지가 아니라 기간 전체 기준이다 (명세서 4.5)
-    totals = scoped("total_amount, order_item(quantity)").execute().data
+    # summary는 페이지가 아니라 기간 전체 기준이다 (명세서 4.5).
+    # fetch_all로 읽는 이유: 범위를 안 주면 PostgREST가 1000행에서 조용히 자른다.
+    # total은 count="exact"라 정확한데 summary만 1000건분으로 계산돼, 30일 조회에서
+    # "총 2,792건"과 "매출 1,607만원(=1000건분)"이 나란히 표시되는 상태였다.
+    totals = fetch_all(
+        lambda: scoped("total_amount, order_item(quantity)"), order_by="order_id"
+    )
     summary = OrderSummary(
         sales_amount=sum(money(r["total_amount"]) for r in totals),
         order_count=len(totals),
