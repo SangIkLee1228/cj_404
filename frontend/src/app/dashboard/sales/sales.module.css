@@ -1,0 +1,379 @@
+/* Dashboard 판매 통계·내역(S-07) 전용 스타일. Inventory/Products의
+   *.module.css 구조를 참고했지만 그 파일들을 import하지 않고 이 파일
+   안에서 독립적으로 재현한다. 색상은 기존 --dashboard-* 토큰만 사용한다. */
+
+/* 큰 화면 전용: PageHeader에 이 클래스가 함께 전달됐을 때만 제목/설명과
+   기간 필터를 같은 행 하단 정렬로 바꾼다(다른 Dashboard 페이지는 이
+   className을 전달하지 않으므로 영향 없음). header.salesPageHeader는
+   .pageHeader(dashboard-layout.module.css, 단일 클래스)보다 명시도가 높은
+   엘리먼트+클래스 결합 선택자라, 두 CSS Module이 번들에 실리는 순서에
+   기대지 않고도 항상 이 규칙이 이긴다(!important 불필요).
+
+   breakpoint 1200px 근거: Inventory/Products 페이지에서 같은 Sidebar 폭
+   (240px 고정)을 근거로 확정한 값과 동일하게 맞췄다 — Sales의 actions 행
+   (기간 SegmentedControl 하나)은 더 좁아 이 값에서 항상 여유 있게 들어간다. */
+@media (min-width: 1200px) {
+  header.salesPageHeader {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+  }
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.filterGroupLabel {
+  margin-right: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--dashboard-color-text-muted);
+}
+
+.contentStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 요약 KPI 카드 3장. dashboard.md의 "카드 나열은 쓰지 않는다" 원칙은 표
+   중심 비교 화면(목록)에 대한 규칙이라, 요약 수치 3개는 표와 별개로 카드로
+   둔다 — 목업의 .sales-summary 구조와 동일하다. */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summaryLabel {
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.summaryValue {
+  color: var(--dashboard-color-text-primary);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.summarySub {
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+}
+
+/* 판매 목록 표. Inventory(F1-6A)와 동일한 패턴이다. */
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.nowrapCell {
+  white-space: nowrap;
+}
+
+.productsCell {
+  max-width: 260px;
+}
+
+.discountText {
+  color: var(--dashboard-color-status-low-text);
+}
+
+.totalAmount {
+  font-weight: 700;
+}
+
+.nonMemberText {
+  color: var(--dashboard-color-text-muted);
+}
+
+.tableEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 페이지네이션 footer. tableWrapper와 형제 요소로, table/tbody 안에는
+   넣지 않는다. */
+.paginationFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--dashboard-color-card-divider);
+}
+
+.paginationCount {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.paginationNav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paginationPageText {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 판매 상세 모달(읽기 전용). Dialog.Portal이 body 바로 아래에 렌더링하므로
+   이 규칙들은 Dashboard .theme 조상 없이도(SalesDetailModal이 Content/
+   Overlay에 theme 클래스를 직접 붙여) 항상 같은 --dashboard-* 토큰을
+   참조한다. */
+
+/* 어두운 배경 토큰이 따로 없어 기존 텍스트 색상 토큰 중 가장 어두운
+   --dashboard-color-text-primary를 투명도와 섞어 스크림을 만든다(임의
+   rgba 없음). */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-text-primary) 45%,
+    transparent
+  );
+}
+
+.modalContent {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 61;
+  width: min(560px, calc(100vw - 40px));
+  max-height: 85vh;
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: var(--dashboard-radius-card);
+  background: var(--dashboard-color-surface);
+  box-shadow: var(--dashboard-shadow-card);
+}
+
+.modalContent:focus-visible {
+  outline: none;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+}
+
+.modalTitle {
+  margin: 0;
+  color: var(--dashboard-color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modalClose {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dashboard-color-text-muted);
+  cursor: pointer;
+}
+
+.modalClose:hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  color: var(--dashboard-color-text-primary);
+}
+
+.modalClose:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* 스크린 리더 전용 Dialog.Description. 색상 값이 없는 순수 레이아웃
+   유틸리티라 --dashboard-* 토큰과 무관하다. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.modalBody {
+  padding: 16px 18px;
+}
+
+.detailHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.detailTime {
+  color: var(--dashboard-color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.detailOrderId {
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+}
+
+.detailTableWrapper {
+  overflow-x: auto;
+  margin-bottom: 14px;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: 9px;
+}
+
+.detailTable {
+  width: 100%;
+  min-width: 380px;
+  border-collapse: collapse;
+}
+
+.detailTable th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.detailTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.detailTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 정보 박스(CJ ONE 적립·인식 정정 여부). 목업의 .order-info-box(#f8f4ec)에
+   정확히 대응하는 기존 토큰이 없어, 같은 계열의 --dashboard-color-notice-
+   background를 재사용한다(임의 hex 없음). */
+.infoBox {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--dashboard-color-notice-border);
+  border-radius: 9px;
+  background: var(--dashboard-color-notice-background);
+}
+
+.infoBoxTitle {
+  margin: 0 0 8px;
+  color: var(--dashboard-color-notice-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.infoRow + .infoRow {
+  margin-top: 6px;
+}
+
+.infoLabel {
+  color: var(--dashboard-color-text-muted);
+}
+
+.amountSummary {
+  padding-top: 12px;
+  border-top: 1px solid var(--dashboard-color-card-divider);
+}
+
+.amountRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+}
+
+.amountRowFinal {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 15px;
+  font-weight: 800;
+}
