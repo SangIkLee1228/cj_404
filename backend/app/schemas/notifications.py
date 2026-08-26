@@ -1,9 +1,14 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel
 
 from app.schemas.codes import NotificationType
+
+# 목업 알림 필터는 "재고 부족 / 매진"으로 갈리는데 DB의 notif_type은 STOCK_LOW 하나뿐이라
+# 수량 스냅샷에서 파생한다. INFO는 SYSTEM 알림처럼 재고와 무관한 건이다.
+NotificationSeverity = Literal["OUT", "LOW", "INFO"]
 
 
 class NotificationListItem(BaseModel):
@@ -17,8 +22,21 @@ class NotificationListItem(BaseModel):
     title: str
     message: str
     remaining_qty_snapshot: int | None = None
+    severity: NotificationSeverity
     is_read: bool
     created_at: datetime
+
+
+class NotificationSummary(BaseModel):
+    """목업 알림 페이지 상단의 "2 매진 · 3 재고 부족 · 5 안읽음" 카운트.
+
+    현재 필터가 아니라 **매장 전체** 기준이다 - 필터를 걸어도 상단 숫자는 안 바뀌어야
+    "매진 2건이 있으니 그 탭을 눌러보자"가 성립한다.
+    """
+
+    out_count: int
+    low_count: int
+    unread_count: int
 
 
 class NotificationListResponse(BaseModel):
@@ -27,6 +45,7 @@ class NotificationListResponse(BaseModel):
     limit: int
     offset: int
     unread_count: int
+    summary: NotificationSummary
     updated_at: datetime
 
 
