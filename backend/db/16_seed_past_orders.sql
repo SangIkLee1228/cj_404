@@ -11,11 +11,12 @@
 -- 규모는 기존 시드의 오늘 하루치를 따른다 (DB설계서 v2.2 · 9-2의 "결정적·멱등" 원칙 유지):
 --   일 93건 · 건당 2.52줄 · 건당 4.02개 · 09:00~18:12 KST
 --
--- 판매 분포: 상위 10종이 전체의 약 30%
+-- 판매 분포: 지정한 빵 10종이 전체의 약 30%
 --   v1은 상품을 `% 상품수`로 균등하게 뽑아 121종이 거의 똑같이 팔렸다(1위 1.29%,
 --   기타 93.8%). 실제 빵집은 간판 상품에 판매가 몰리는데, 그 분포가 없으니 운영
 --   현황의 "판매 상위 품목" 도넛이 회색 기타 한 덩어리로만 보였다.
---   -> 순위별 가중치를 준 확장 풀에서 뽑는다(아래 _pick).
+--   -> 베스트셀러 10종(_best)을 상위로 고정하고, 순위별 가중치를 준 확장 풀에서
+--      뽑는다(_pick). 10종은 전부 빵이며 시연에서 도넛 범례에 이름이 뜨는 자리다.
 --
 -- 생성 범위: 회원 미연결 · 할인 없음 · PAID 고정.
 --   회원/포인트 경로는 오늘치 93건(회원 18건)이 이미 커버하고 있고, POINT_TRANSACTION의
@@ -47,6 +48,7 @@ declare
   v_items  bigint := 0;
   v_o      bigint;
   v_i      bigint;
+  v_matched int;
 begin
   select staff_id into v_staff
     from staff_account where store_id = p_store_id and is_active order by staff_id limit 1;
@@ -56,16 +58,54 @@ begin
 
   -- 상품 풀: 이 매장이 실제로 파는 것만. idx는 0-기반 연속 번호라 나머지연산으로 고를 수 있다.
   -- 커넥션 풀러가 세션을 재사용할 수 있어 on commit drop만 믿지 않고 먼저 지운다.
+  drop table if exists _best;
   drop table if exists _pool;
   drop table if exists _pick;
 
-  -- 순위를 product_id 순이 아니라 해시 순으로 매긴다. 그냥 ID 순으로 하면 "번호가
-  -- 빠른 10종"이 베스트셀러가 돼 카테고리가 한쪽으로 쏠린다.
+  -- 상위 10종은 지정 목록으로 고정한다. 이름은 DB의 product_name과 정확히 일치해야
+  -- 한다(부분일치 금지 - API명세서 v1.3 · 4.2). 요청받은 표기와 DB 표기가 달라
+  -- 아래처럼 대응시켰다:
+  --   낙엽소세지브레드   -> 낙엽 소시지 브레드
+  --   리얼초코소라빵     -> 리얼 초코 소라빵
+  --   후레쉬 크림샌드빵  -> 부드러운 후레쉬크림 샌드빵
+  --   밤식빵             -> 마구마구 밤식빵 대   (DB의 유일한 밤식빵)
+  --   단팥빵             -> 팥이 빵빵 단팥빵     (미니 단팥빵과 구분)
+  create temp table _best (product_name text primary key, ord int) on commit drop;
+  insert into _best (product_name, ord) values
+    ('팥이 빵빵 단팥빵',            1),
+    ('데일리 우유식빵',             2),
+    ('소금버터롤',                  3),
+    ('낙엽 소시지 브레드',          4),
+    ('소보로빵',                    5),
+    ('슈크림빵',                    6),
+    ('추억의 사라다 고로케',        7),
+    ('마구마구 밤식빵 대',          8),
+    ('리얼 초코 소라빵',            9),
+    ('부드러운 후레쉬크림 샌드빵', 10);
+
+  -- 이름이 하나라도 어긋나면 그 상품은 조용히 하위로 밀려 분포가 달라진다.
+  -- 조용히 틀리느니 즉시 실패시킨다.
+  select count(*) into v_matched
+    from _best b
+    join product p on p.product_name = b.product_name
+    join store_product sp on sp.product_id = p.product_id and sp.store_id = p_store_id
+   where sp.is_active and p.is_active;
+
+  if v_matched <> (select count(*) from _best) then
+    raise exception '베스트셀러 %개 중 %개만 매칭됐습니다. 상품명 표기를 확인하세요',
+      (select count(*) from _best), v_matched;
+  end if;
+
+  -- 나머지는 해시 순. ID 순으로 하면 "번호가 빠른 것들"이 뒤를 채워 카테고리가 쏠린다.
   create temp table _pool on commit drop as
   select sp.product_id, sp.price::numeric as price,
-         (row_number() over (order by (sp.product_id * 7919) % 1000, sp.product_id) - 1)::int as rnk
+         (row_number() over (
+            order by coalesce(b.ord, 999),
+                     (sp.product_id * 7919) % 1000,
+                     sp.product_id) - 1)::int as rnk
     from store_product sp
     join product p on p.product_id = sp.product_id
+    left join _best b on b.product_name = p.product_name
    where sp.store_id = p_store_id and sp.is_active and p.is_active;
 
   if not exists (select 1 from _pool) then
@@ -73,15 +113,19 @@ begin
   end if;
 
   -- 가중치만큼 슬롯을 복제한 확장 풀. 균등하게 뽑아도 인기 상품이 자주 걸린다.
-  --   1~10위 : 12 - 순위 (12,11,…,3) = 75슬롯
-  --   11~40위: 3                      = 90슬롯
-  --   41위~  : 1                      = 81슬롯 (121종 기준)
-  -- => 상위 10종이 75/246 = 30.5%, 1위가 12/246 = 4.9%
+  --   1~10위 : 10 - 순위/2 (10,10,9,9,8,8,7,7,6,6) = 80슬롯
+  --   11~40위: 3                                    = 90슬롯
+  --   41위~  : 1                                    = 81슬롯 (121종 기준)
+  -- => 지정 10종이 80/251 = 31.9%, 1위가 10/251 = 4.0%
+  --
+  -- 최하위 가중치를 6으로 둔 이유: 처음엔 `12 - 순위`(끝이 4,3)로 했더니 9·10위가
+  -- 중위권(가중치 3)과 사실상 동률이 돼, 지정 10종 중 2종이 상위에서 밀려났다.
+  -- 중위권의 2배를 유지해야 뽑기 편차와 무관하게 10종이 항상 상위에 남는다.
   create temp table _pick on commit drop as
   select (row_number() over (order by p.rnk, g) - 1)::int as idx, p.product_id, p.price
     from _pool p,
          lateral generate_series(
-           1, case when p.rnk < 10 then 12 - p.rnk when p.rnk < 40 then 3 else 1 end
+           1, case when p.rnk < 10 then 10 - (p.rnk / 2) when p.rnk < 40 then 3 else 1 end
          ) g;
 
   select count(*) into v_n from _pick;
