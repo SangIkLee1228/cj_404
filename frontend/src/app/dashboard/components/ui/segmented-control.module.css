@@ -1,0 +1,54 @@
+/* Dashboard 전용 SegmentedControl(Radix ToggleGroup) primitive.
+   색상은 ../../styles/dashboard-theme.module.css의 .theme 토큰(--dashboard-*)을
+   참조하므로 Dashboard 최상위 theme 클래스의 자손에서만 의도한 색으로
+   렌더링된다. POS·전역 화면에서는 사용하지 않는다. */
+
+.root {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--dashboard-color-segmented-border);
+  border-radius: 8px;
+  background: var(--dashboard-color-surface);
+  color: var(--dashboard-color-text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item:not(:disabled):hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  border-color: var(--dashboard-color-segmented-hover-border);
+}
+
+.item[data-state='on'] {
+  background: var(--dashboard-color-status-ok-background);
+  color: var(--dashboard-color-status-ok-text);
+  border-color: var(--dashboard-color-segmented-selected-border);
+  font-weight: 700;
+}
+
+.item[data-state='on']:not(:disabled):hover {
+  background: var(--dashboard-color-segmented-selected-hover-background);
+  border-color: var(--dashboard-color-segmented-selected-hover-border);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+.item:disabled {
+  cursor: not-allowed;
+}
