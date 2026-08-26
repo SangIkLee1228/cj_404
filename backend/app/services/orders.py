@@ -20,7 +20,12 @@ from fastapi import HTTPException, status
 from app.core.deps import StaffContext
 from app.core.masking import mask_name
 from app.core.supabase_client import get_supabase
-from app.schemas.orders import OrderDetail, OrderItemRead, OrderMemberSummary
+from app.schemas.orders import (
+    OrderDetail,
+    OrderItemRead,
+    OrderListItem,
+    OrderMemberSummary,
+)
 
 logger = structlog.get_logger("app.services.orders")
 #        ^ 이름을 모듈 경로로 주면 로그에서 어디서 났는지 바로 보인다.
@@ -543,3 +548,44 @@ def save_member_link(order: dict, member: dict | None, amounts: Amounts) -> dict
         "order_id", order["order_id"]).execute()
     # order_detail이 order["member"] 임베드를 읽으므로 메모리에도 반영한다.
     return {**order, **columns, "member": member}
+
+
+ORDER_LIST_SELECT = (
+    "order_id, ordered_at, paid_at, member_id, gross_amount, discount_amount,"
+    " total_amount, point_earned,"
+    " order_item(quantity, product(product_name))"
+)
+
+
+def item_summary(product_names: list[str]) -> str:
+    """'카라멜 크림빵, 소금빵 외 1' 패턴 (명세서 4.5).
+
+    dashboard.py의 _item_summary와 같은 규칙이다. 같은 화면 언어를 두 곳이 쓰므로
+    나중에 core로 올려 공용화하는 편이 낫다.
+    """
+    if not product_names:
+        return ""
+    if len(product_names) <= 2:
+        return ", ".join(product_names)
+    return f"{', '.join(product_names[:2])} 외 {len(product_names) - 2}"
+
+
+def order_list_item(row: dict) -> OrderListItem:
+    """조인 결과 1행을 목록 응답 1건으로 평탄화한다. DB를 타지 않는다."""
+    items = row.get("order_item") or []
+    names = [
+        (_embedded(it.get("product")) or {}).get("product_name", "")
+        for it in items
+    ]
+    return OrderListItem(
+        order_id=row["order_id"],
+        ordered_at=row["ordered_at"],
+        paid_at=row["paid_at"],
+        item_count=sum(int(it["quantity"]) for it in items),
+        item_summary=item_summary([n for n in names if n]),
+        gross_amount=money(row["gross_amount"]),
+        discount_amount=money(row["discount_amount"]),
+        total_amount=money(row["total_amount"]),
+        member_applied=row.get("member_id") is not None,
+        point_earned=row["point_earned"],
+    )

@@ -165,3 +165,35 @@ class PayResponse(BaseModel):
     point_earned: int
     inventory_updates: list[InventoryUpdate]
     notifications_created: list[NotificationCreated]
+
+
+class OrderSummary(BaseModel):
+    """조회 기간 전체 기준 집계 (페이지 기준이 아니다)."""
+
+    sales_amount: int
+    order_count: int
+    item_qty: int
+
+
+class OrderListItem(BaseModel):
+    """GET /orders 목록 1건 (API명세서 4.5)."""
+
+    order_id: int
+    ordered_at: datetime
+    paid_at: datetime | None = None
+    item_count: int
+    item_summary: str
+    gross_amount: int
+    discount_amount: int
+    total_amount: int
+    member_applied: bool
+    point_earned: int
+
+
+class OrderListResponse(BaseModel):
+    items: list[OrderListItem]
+    total: int
+    limit: int
+    offset: int
+    timezone: str = "Asia/Seoul"
+    summary: OrderSummary

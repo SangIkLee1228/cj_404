@@ -1,19 +1,25 @@
+from datetime import date
+
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.errors import ApiError
 from app.core.supabase_client import get_supabase
+from app.core.timeutil import resolve_period
 from app.schemas.orders import (
     ManualDiscountRequest,
     MemberLinkRequest,
     OrderDetail,
     OrderItemCreate,
     OrderItemUpdate,
+    OrderListResponse,
+    OrderSummary,
     PayRequest,
     PayResponse,
 )
 from app.services.orders import (
+    ORDER_LIST_SELECT,
     add_quantity,
     cancel_order,
     compute_amounts,
@@ -29,6 +35,7 @@ from app.services.orders import (
     member_rates,
     money,
     order_detail,
+    order_list_item,
     recalculate,
     replace_item_product,
     save_manual_discount,
@@ -86,6 +93,58 @@ def get_current_order(staff: StaffContext = Depends(get_staff_context)):
     if order is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return order_detail(order, load_items(order["order_id"]))
+
+
+@router.get("", response_model=OrderListResponse)
+def list_orders(
+    period: str = Query(default="TODAY", pattern="^(TODAY|7D|30D)$"),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    order_status: str = Query(
+        default="PAID", alias="status", pattern="^(PAID|ALL)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """판매 내역 목록 (FR-17). 기간 경계는 KST 기준이다."""
+    supabase = get_supabase()
+    rng = resolve_period(period, date_from, date_to)
+
+    def scoped(select: str, count: str | None = None):
+        """기간·매장·상태 필터를 한 곳에서 조립한다. 목록과 summary가 같은 조건을 써야 한다."""
+        q = (
+            supabase.table("orders")
+            .select(select, count=count)
+            .eq("store_id", staff.store_id)
+            .gte("ordered_at", rng.start_utc.isoformat())
+            .lt("ordered_at", rng.end_utc_exclusive.isoformat())
+        )
+        return q if order_status == "ALL" else q.eq("status", "PAID")
+
+    page = (
+        scoped(ORDER_LIST_SELECT, count="exact")
+        .order("ordered_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+
+    # summary는 페이지가 아니라 기간 전체 기준이다 (명세서 4.5)
+    totals = scoped("total_amount, order_item(quantity)").execute().data
+    summary = OrderSummary(
+        sales_amount=sum(money(r["total_amount"]) for r in totals),
+        order_count=len(totals),
+        item_qty=sum(
+            int(i["quantity"]) for r in totals for i in (r.get("order_item") or [])
+        ),
+    )
+
+    return OrderListResponse(
+        items=[order_list_item(row) for row in page.data],
+        total=page.count or 0,
+        limit=limit,
+        offset=offset,
+        summary=summary,
+    )
 
 
 @router.get("/{order_id}", response_model=OrderDetail)
