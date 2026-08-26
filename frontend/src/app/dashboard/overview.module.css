@@ -1,0 +1,415 @@
+/* Dashboard 운영 현황(홈, OV-1) 전용 스타일. Inventory/Products/Sales/
+   Alerts의 *.module.css 구조를 참고했지만 그 파일들을 import하지 않고 이
+   파일 안에서 독립적으로 재현한다. 색상은 기존 --dashboard-* 토큰만
+   사용한다. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.filterGroupLabel {
+  margin-right: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--dashboard-color-text-muted);
+}
+
+/* KPI Grid. 목업(dashboard_mock.html)의 #kpis.cards 규칙
+   (min-width:1101px에서 1.6fr 1fr 1fr)을 그대로 따른다 — 매출 카드가
+   상대적으로 넓다. */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 1101px) {
+  .kpiGrid {
+    grid-template-columns: 1.6fr 1fr 1fr;
+  }
+}
+
+/* 중간 화면(760~1100px): 2열 유지, 매출 카드가 첫 행 전체 폭을 차지한다. */
+@media (max-width: 1100px) {
+  .salesCard {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 작은 화면: 1열로 완전히 쌓는다. salesCard의 span도 자동으로 해제된다
+   (grid-column: 1 / -1이 1열 grid에서는 실질적으로 의미가 없어짐). */
+@media (max-width: 760px) {
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .salesCard {
+    grid-column: auto;
+  }
+}
+
+.kpiCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kpiLabel {
+  color: var(--dashboard-color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.kpiValue {
+  color: var(--dashboard-color-text-primary);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.kpiChange {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 화살표만으로 의미를 전달하지 않도록 항상 텍스트(퍼센트 + "전 기간
+   대비")와 함께 표시한다 — 색은 보조 신호일 뿐이다. */
+.kpiChangeUp {
+  color: var(--dashboard-color-status-ok-text);
+}
+
+.kpiChangeDown {
+  color: var(--dashboard-color-status-out-text);
+}
+
+.kpiChangeFlat,
+.kpiChangeNeutral {
+  color: var(--dashboard-color-text-muted);
+}
+
+.kpiChangeIcon {
+  flex-shrink: 0;
+}
+
+/* ---- Chart Grid(OV-2) ---- */
+
+/* 왼쪽 매출+결제 건수 Mixed Chart, 오른쪽 판매 상위 품목 Doughnut. 목업
+   (dashboard_mock.html)의 .grid2(약 1.4fr/.85fr) 비율을 그대로 따른다. */
+.chartGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* 중간 화면 이하: 두 차트 카드를 세로로 쌓는다. */
+@media (max-width: 1100px) {
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chartTitle {
+  margin: 0;
+  color: var(--dashboard-color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chartSubtitle {
+  color: var(--dashboard-color-text-muted);
+  font-size: 10px;
+}
+
+.chartBody {
+  min-width: 0;
+}
+
+/* Mixed Chart(Bar+Line) 높이는 CSS로만 관리한다 — canvas에 고정
+   width/height attribute를 직접 지정하지 않고, Chart.js의
+   responsive:true + maintainAspectRatio:false가 이 컨테이너 크기에 맞춰
+   다시 그리게 한다. */
+.salesChartContainer {
+  position: relative;
+  height: 230px;
+}
+
+@media (min-width: 1101px) {
+  .salesChartContainer {
+    height: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .salesChartContainer {
+    height: 200px;
+  }
+}
+
+/* 스크린 리더 전용 텍스트/데이터 목록. 색상 값이 없는 순수 레이아웃
+   유틸리티라 --dashboard-* 토큰과 무관하다. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chartEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 판매 상위 품목 카드 전용 chartBody. 목업(dashboard_mock.html)처럼
+   카드 헤더 아래 남은 세로 공간에서 도넛+범례 묶음이 중앙에 오도록,
+   이 chartBody만 flex:1로 남은 공간을 채우고 내부 콘텐츠를 세로
+   중앙 정렬한다. 왼쪽 Mixed Chart의 .chartBody(공유 클래스)는 그대로
+   두고 영향을 주지 않는다. */
+.doughnutChartBody {
+  display: flex;
+  flex: 1;
+  align-items: center;
+}
+
+/* 판매 상위 품목 Doughnut 레이아웃: 큰 화면은 canvas+legend를 가로로,
+   좁은 화면은 세로로 쌓는다. */
+/* 판매 상위 품목 도넛 팔레트. frontend/docs/dashboard_mock.html의 판매
+   상위 품목 차트 팔레트 값을 그대로 옮긴 것으로, 목업 일치 보완(OV-2
+   보완)을 위해서만 이 페이지 범위에 정의한다 — 공통 Dashboard theme
+   토큰(dashboard-theme.module.css)과는 무관하다. */
+.doughnutLayout {
+  --overview-top-product-color-1: #ff6b19;
+  --overview-top-product-color-2: #f4ad14;
+  --overview-top-product-color-3: #92bf2d;
+  --overview-top-product-color-4: #0e7a60;
+  --overview-top-product-color-5: #3791d0;
+  --overview-top-product-other-color: #687983;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .doughnutLayout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.doughnutCanvasWrapper {
+  position: relative;
+  flex-shrink: 0;
+  width: 150px;
+  height: 150px;
+  margin: 0 auto;
+}
+
+@media (min-width: 1101px) {
+  .doughnutCanvasWrapper {
+    width: 170px;
+    height: 170px;
+  }
+}
+
+/* 중앙 오버레이(판매 수량 합계). Tooltip·hover 등 canvas 인터랙션을
+   가리지 않도록 pointer-events를 끈다. */
+.doughnutCenterOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.doughnutCenterValue {
+  color: var(--dashboard-color-text-primary);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.doughnutCenterLabel {
+  margin-top: 2px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* Chart.js 기본 legend 대신 쓰는 DOM legend(접근성 있는 실제 텍스트
+   역할도 겸함 — 상품명/수량/비율). */
+.chartLegend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chartLegendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.chartLegendSwatch {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.chartLegendName {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--dashboard-color-text-primary);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chartLegendQty {
+  flex-shrink: 0;
+  color: var(--dashboard-color-text-muted);
+}
+
+.chartLegendRatio {
+  flex-shrink: 0;
+  min-width: 36px;
+  color: var(--dashboard-color-text-primary);
+  font-weight: 800;
+  text-align: right;
+}
+
+/* ---- 최근 판매(OV-3) ---- */
+
+/* 차트 그리드와 동일한 섹션 간격으로 아래에 배치한다(.chartGrid의
+   margin-top과 동일한 값 — 기존 섹션 간격 관례를 그대로 따름). */
+.recentOrdersCard {
+  margin-top: 12px;
+}
+
+/* 목업의 #recentOrders.recent-scroll(max-height:336px; overflow-y:auto)
+   의도를 그대로 반영한다 — 최대 6행이 넘칠 정도로 길어지지 않게 카드
+   내부에서만 세로 스크롤한다. 좁은 화면에서는 이 wrapper 자체가 가로
+   스크롤도 함께 담당해, 페이지 전체가 아니라 표 안에서만 스크롤되게
+   한다. */
+.recentTableWrapper {
+  max-height: 336px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* 목업(dashboard_mock.html)처럼 별도 열 너비 지정 없이 기본
+   table-layout: auto(생략 시 기본값)를 그대로 쓴다 — 콘텐츠 길이를
+   기준으로 브라우저가 열 너비를 자연스럽게 배분한다. */
+.recentTable {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+/* 스크롤 중에도 열 제목을 볼 수 있도록 sticky header로 고정한다.
+   background/color/font/정렬/padding/border는 기존 값을 그대로
+   유지하고 위치 속성만 추가한다. */
+.recentTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.recentTable td {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.recentTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 시간·수량·결제 금액은 불필요하게 줄바꿈되지 않게 한다. 수량·결제
+   금액은 오른쪽 정렬하지 않고 목업처럼 왼쪽 정렬을 명시적으로
+   유지한다. */
+.recentTimeCell {
+  white-space: nowrap;
+}
+
+.recentQtyCell,
+.recentAmountCell {
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* 상품명 열은 별도 고정 너비를 두지 않고 table-layout: auto의 자연스러운
+   배분에 맡긴다 — 브라우저가 배분한 폭 안에서 긴 상품명만 ellipsis
+   처리한다. */
+.recentProductCell {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recentAmount {
+  font-weight: 700;
+}
+
+/* 데이터가 없을 때도 카드 본문이 지나치게 좁거나 높지 않도록 최소
+   높이를 두고, flex로 가로·세로 모두 중앙 정렬한다(기존 padding만으로는
+   가로 중앙 정렬만 되던 것을 보완). */
+.recentEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  margin: 0;
+  padding: 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
