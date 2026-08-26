@@ -475,3 +475,56 @@ def cancel_order(order: dict) -> dict:
     get_supabase().table("orders").update(columns).eq(
         "order_id", order["order_id"]).execute()
     return {**order, **columns}
+
+
+_MEMBER_SELECT = (
+    "member_id, name, grade_id,"
+    " membership_grade(grade_code, grade_name, discount_rate, point_earn_rate)"
+)
+
+
+def load_member_by_phone(phone: str) -> dict:
+    """휴대폰번호로 회원 조회 (FR-18). 미등록이면 404.
+
+    명세서 4.5: FE는 이 404를 "비회원"이 아니라 "번호를 다시 확인해 주세요"로 표시한다.
+    """
+    rows = (
+        get_supabase()
+        .table("member")
+        .select(_MEMBER_SELECT)
+        .eq("phone", phone)
+        .eq("is_active", True)
+        .limit(1)
+        .execute()
+    ).data
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "일치하는 회원을 찾을 수 없습니다")
+    return rows[0]
+
+
+def member_rates(member: dict | None) -> tuple[Decimal, Decimal]:
+    """회원 행에서 (등급 할인율, 적립률). 비회원이면 (0, 0)."""
+    if member is None:
+        return Decimal("0"), Decimal("0")
+    grade = _embedded(member.get("membership_grade")) or {}
+    return (
+        Decimal(str(grade.get("discount_rate", 0))),
+        Decimal(str(grade.get("point_earn_rate", 0))),
+    )
+
+
+def save_member_link(order: dict, member: dict | None, amounts: Amounts) -> dict:
+    """회원 연결/해제와 금액 6종을 한 번의 UPDATE로 저장한다 (FR-18).
+
+    applied_grade_id는 결제 시점 등급의 스냅샷이다. 회원 등급이 나중에 바뀌어도
+    이 주문의 할인율은 변하지 않아야 하기 때문이다 (schemas/orders.py Order 주석).
+    """
+    columns: dict = {
+        **amounts.as_order_columns(),
+        "member_id": member["member_id"] if member else None,
+        "applied_grade_id": member["grade_id"] if member else None,
+    }
+    get_supabase().table("orders").update(columns).eq(
+        "order_id", order["order_id"]).execute()
+    # order_detail이 order["member"] 임베드를 읽으므로 메모리에도 반영한다.
+    return {**order, **columns, "member": member}

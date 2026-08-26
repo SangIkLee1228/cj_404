@@ -122,3 +122,9 @@ class ManualDiscountRequest(BaseModel):
 
     amount: int = Field(ge=0)
     reason: str | None = Field(default=None, max_length=100)
+
+
+class MemberLinkRequest(BaseModel):
+    """POST /orders/{id}/member 요청 (FR-18)."""
+
+    phone: str = Field(pattern=r"^01\d{8,9}$", description="하이픈 없는 휴대폰번호")

@@ -5,6 +5,7 @@ from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
 from app.schemas.orders import (
     ManualDiscountRequest,
+    MemberLinkRequest,
     OrderDetail,
     OrderItemCreate,
     OrderItemUpdate,
@@ -19,12 +20,16 @@ from app.services.orders import (
     load_grade_rates,
     load_item,
     load_items,
+    load_member_by_phone,
     load_order,
     load_store_price,
+    member_rates,
+    money,
     order_detail,
     recalculate,
     replace_item_product,
     save_manual_discount,
+    save_member_link,
     set_item_quantity,
 )
 
@@ -191,3 +196,55 @@ def cancel_current_order(order_id: int, staff: StaffContext = Depends(get_staff_
     order = cancel_order(order)
     logger.info("order.cancelled", order_id=order_id, staff_id=staff.staff_id)
     return order_detail(order, load_items(order_id))
+
+
+@router.post("/{order_id}/member", response_model=OrderDetail)
+def link_member(
+    order_id: int,
+    payload: MemberLinkRequest,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """CJ ONE 회원 연결 (FR-18). 등급 할인·적립이 즉시 반영된다."""
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+
+    member = load_member_by_phone(payload.phone)
+    discount_rate, point_earn_rate = member_rates(member)
+
+    items = load_items(order_id)
+    amounts = compute_amounts(
+        items,
+        discount_rate=discount_rate,
+        point_earn_rate=point_earn_rate,
+        manual_discount_amount=money(order.get("manual_discount_amount") or 0),
+    )
+
+    order = save_member_link(order, member, amounts)
+    # 휴대폰번호는 뒤 4자리만 남긴다 (NFR-06)
+    logger.info(
+        "order.member_linked",
+        order_id=order_id,
+        member_id=member["member_id"],
+        phone_tail=payload.phone[-4:],
+    )
+    return order_detail(order, items)
+
+
+@router.delete("/{order_id}/member", response_model=OrderDetail)
+def unlink_member(
+    order_id: int,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """회원 연결 해제 (FR-18). 할인·적립이 0으로 복귀한다."""
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+
+    items = load_items(order_id)
+    amounts = compute_amounts(
+        items,
+        manual_discount_amount=money(order.get("manual_discount_amount") or 0),
+    )
+
+    order = save_member_link(order, None, amounts)
+    logger.info("order.member_unlinked", order_id=order_id)
+    return order_detail(order, items)
