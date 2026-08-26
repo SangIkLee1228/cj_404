@@ -18,8 +18,8 @@ import structlog  # 기존 코드가 쓰는 로거. print/logging 대신 통일
 from fastapi import HTTPException, status
 
 from app.core.deps import StaffContext
-from app.core.masking import mask_name
 from app.core.formatting import item_summary
+from app.core.masking import mask_name
 from app.core.supabase_client import get_supabase
 from app.schemas.orders import (
     OrderDetail,
