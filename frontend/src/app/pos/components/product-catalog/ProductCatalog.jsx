@@ -5,6 +5,7 @@ import {
   BREAD_CATEGORIES,
   DRINK_CATALOG,
   DRINK_CATEGORIES,
+  sortForDisplay,
 } from '../../mock-data/mockProducts';
 import { mergeCatalogWithManagerState } from '../../sync/posSync';
 
@@ -21,10 +22,11 @@ export default function ProductCatalog({
   const baseCatalog = isDrink ? DRINK_CATALOG : BREAD_CATALOG;
   const catalog = mergeCatalogWithManagerState(baseCatalog, managerState);
   const categories = isDrink ? DRINK_CATEGORIES : BREAD_CATEGORIES;
-  const items =
+  const filtered =
     category === '전체'
       ? catalog
       : catalog.filter((p) => p.category === category);
+  const items = sortForDisplay(filtered, categories);
 
   return (
     <>
