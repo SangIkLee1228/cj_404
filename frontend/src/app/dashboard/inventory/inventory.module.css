@@ -1,0 +1,63 @@
+/* Inventory(S-11) 콘텐츠 상단(PageHeader actions) 전용 스타일.
+   목업(frontend/docs/dashboard_mock.html)의 .filters.inventory-filters /
+   .filter-group-label / .filter-divider / .search 규칙을, 이미 구현된
+   Dashboard 공통 UI(SegmentedControl/SelectControl)가 쓰는 --dashboard-*
+   토큰에 맞춰 이 페이지 안에서만 재현한다. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.filterGroupLabel {
+  margin-right: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--dashboard-color-text-muted);
+}
+
+/* 의미 없는 장식용 구분선이라 CSS로만 그리고 접근성 트리에서는
+   aria-hidden으로 제외한다(마크업 쪽 처리). */
+.filterDivider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--dashboard-color-segmented-border);
+}
+
+.searchInput {
+  flex-shrink: 0;
+  min-width: 210px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--dashboard-color-segmented-border);
+  border-radius: 8px;
+  background: var(--dashboard-color-surface);
+  color: var(--dashboard-color-text-primary);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.searchInput::placeholder {
+  color: var(--dashboard-color-text-muted);
+}
+
+.searchInput:hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  border-color: var(--dashboard-color-segmented-hover-border);
+}
+
+.searchInput:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* type="search"이 기본으로 넣는 WebKit 취소(x) 버튼 장식을 최소화해,
+   테두리 없는 아이콘 없이 목업의 단순한 입력창 형태에 가깝게 유지한다. */
+.searchInput::-webkit-search-cancel-button {
+  appearance: none;
+  -webkit-appearance: none;
+}
