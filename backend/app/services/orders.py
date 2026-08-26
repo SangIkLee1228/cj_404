@@ -10,11 +10,11 @@ DB 접근을 섞지 않은 이유:
     금액은 틀리면 곧바로 사고인 영역이라 테스트 가능성을 최우선으로 둔다.
 """
 
+import re
 from dataclasses import dataclass  # 금액 묶음을 담을 Amounts 클래스용
 from decimal import ROUND_FLOOR, Decimal  # 명세서 1.5가 floor를 명시 → 반올림 아님
 
 import structlog  # 기존 코드가 쓰는 로거. print/logging 대신 통일
-import re
 from fastapi import HTTPException, status
 
 from app.core.deps import StaffContext

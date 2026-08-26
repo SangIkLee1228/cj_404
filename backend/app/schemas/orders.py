@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.codes import MembershipGradeCode, OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
@@ -132,3 +133,35 @@ class MemberLinkRequest(BaseModel):
     """POST /orders/{id}/member 요청 (FR-18). 하이픈은 있어도 없어도 된다."""
 
     phone: str = Field(min_length=10, max_length=13)
+
+
+class PayRequest(BaseModel):
+    """POST /orders/{id}/pay 요청 (FR-09, FR-12)."""
+
+    payment_method: PaymentMethod = "CARD"
+    # MVP는 포인트 사용 화면이 없다. 0만 허용한다 (아래 설명 참고).
+    point_used: int = Field(default=0, ge=0)
+
+
+class InventoryUpdate(BaseModel):
+    product_id: int
+    remaining_qty: int
+    is_low_stock: bool
+
+
+class NotificationCreated(BaseModel):
+    notification_id: int
+    product_id: int
+    title: str
+
+
+class PayResponse(BaseModel):
+    """결제 확정 응답 (API명세서 4.5)."""
+
+    order_id: int
+    status: OrderStatus
+    paid_at: datetime
+    total_amount: int
+    point_earned: int
+    inventory_updates: list[InventoryUpdate]
+    notifications_created: list[NotificationCreated]

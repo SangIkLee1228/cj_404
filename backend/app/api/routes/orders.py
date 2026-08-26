@@ -2,6 +2,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
+from app.core.errors import ApiError
 from app.core.supabase_client import get_supabase
 from app.schemas.orders import (
     ManualDiscountRequest,
@@ -9,6 +10,8 @@ from app.schemas.orders import (
     OrderDetail,
     OrderItemCreate,
     OrderItemUpdate,
+    PayRequest,
+    PayResponse,
 )
 from app.services.orders import (
     add_quantity,
@@ -248,3 +251,74 @@ def unlink_member(
     order = save_member_link(order, None, amounts)
     logger.info("order.member_unlinked", order_id=order_id)
     return order_detail(order, items)
+
+# __________ pay __________
+
+
+@router.post("/{order_id}/pay", response_model=PayResponse)
+def pay_order(
+    order_id: int,
+    payload: PayRequest,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    '''
+    결제 확정 (FR-09, FR-12).
+
+    상태 전이·재고 차감·매진임박 알림·포인트 적립을 Postgres 함수 하나로 묶는다.
+    PostgREST에는 트랜잭션이 없어 나눠 호출하면 재고만 깎이고 결제가 실패하는 상태가 생긴다.
+    '''
+    order = load_order(order_id, staff)     # 404 / 403
+    ensure_pending(order)
+
+    if payload.point_used:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "포인트 사용은 이번 범위에 포함되지 않습니다.")
+
+    result = (
+        get_supabase()
+        .rpc(
+            "pay_order",
+            {
+                "p_order_id": order_id,
+                "p_store_id": staff.store_id,
+                "p_payment_method": payload.payment_method,
+            },
+        )
+        .execute()
+    ).data
+
+    if not result.get("ok"):
+        code = result.get("error")
+
+        if code == "INVENTORY_SHORTAGE":
+            shortages = result.get("shortages", [])
+            names = ", ".join(s["product_name"] for s in shortages)
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "INVENTORY_SHORTAGE",
+                f"{names}의 잔여 수량이 부족합니다",
+                details=[
+                    {
+                        "field": f"product_id:{s['product_id']}",
+                        "reason": f"requested {s['requested']}, remaining {s['remaining']}",
+                    }
+                    for s in shortages
+                ],
+            )
+
+        if code == "EMPTY_ORDER":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "항목이 없는 주문은 결제할 수 없습니다"
+            )
+
+        raise HTTPException(status.HTTP_409_CONFLICT, "결제할 수 없는 주문 상태입니다")
+
+    logger.info(
+        "order.paid",
+        order_id=order_id,
+        staff_id=staff.staff_id,
+        total_amount=result["total_amount"],
+        point_earned=result["point_earned"],
+        notifications=len(result["notifications_created"]),
+    )
+    return PayResponse(**result)
