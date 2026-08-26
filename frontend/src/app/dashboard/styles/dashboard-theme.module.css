@@ -56,4 +56,14 @@
   --dashboard-color-status-low-text: #8a601b;
   --dashboard-color-status-out-background: #fde7e3;
   --dashboard-color-status-out-text: #a43d31;
+
+  /* Segmented Control — HTML 목업 .filter/.filter.active의 최종 cascade
+     값이다(border/hover/selected border만 신규 토큰화하고, 기본 배경·텍스트·
+     선택 배경·텍스트는 기존 surface/text/status-ok 토큰을 재사용한다). */
+  --dashboard-color-segmented-border: #d8cdc0;
+  --dashboard-color-segmented-hover-background: #eff6f2;
+  --dashboard-color-segmented-hover-border: #c8ddd0;
+  --dashboard-color-segmented-selected-border: #bfe4d4;
+  --dashboard-color-segmented-selected-hover-background: #daf0e6;
+  --dashboard-color-segmented-selected-hover-border: #a9dcc4;
 }
