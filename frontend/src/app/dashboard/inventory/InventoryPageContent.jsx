@@ -216,7 +216,12 @@ export default function InventoryPageContent() {
           ) : null}
           <TableCard id="inventory-table">
             {pageInfo.total === 0 ? (
-              <p className={styles.tableEmpty}>
+              <p
+                className={styles.tableEmpty}
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 선택한 조건에 해당하는 상품이 없습니다.
               </p>
             ) : (
