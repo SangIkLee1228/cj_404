@@ -1,0 +1,29 @@
+/* Dashboard 전용 컬러 토큰.
+   이 토큰은 .theme 클래스를 최상위(Dashboard Layout)에 적용한 요소의
+   자손에게만 CSS custom property로 상속된다.
+   POS(frontend/src/app/pos/**)와 전역 화면(globals.css, 루트 layout)에서는
+   사용하지 않는다.
+   현재 값은 HTML 목업(frontend/docs/dashboard_mock.html)과 기존 Dashboard
+   구현(dashboard-layout.module.css)에서 이미 쓰이던 값을 그대로 옮겨
+   구조화한 초기 토큰이다. */
+.theme {
+  /* Main */
+  --dashboard-color-background: #f8fafc;
+  --dashboard-color-surface: #ffffff;
+  --dashboard-color-text-primary: #0f172a;
+  --dashboard-color-text-muted: #64748b;
+  --dashboard-color-border: #e2e8f0;
+
+  /* Sidebar */
+  --dashboard-color-sidebar-bg-start: #085341;
+  --dashboard-color-sidebar-bg-end: #043025;
+  --dashboard-color-sidebar-text: #ffffff;
+  --dashboard-color-sidebar-text-muted: #a9c9bd;
+  --dashboard-color-sidebar-group-text: #6fa895;
+  --dashboard-color-sidebar-border: rgba(255, 255, 255, 0.16);
+
+  /* Sidebar interaction */
+  --dashboard-color-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --dashboard-color-sidebar-active-bg: rgba(255, 255, 255, 0.18);
+  --dashboard-color-sidebar-control-bg: rgba(255, 255, 255, 0.06);
+}
