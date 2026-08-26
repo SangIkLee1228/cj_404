@@ -4,6 +4,8 @@ import { useState } from 'react';
 import PageHeader from './components/PageHeader';
 import SegmentedControl from './components/ui/SegmentedControl';
 import Card from './components/ui/Card';
+import OverviewSalesChart from './OverviewSalesChart';
+import OverviewTopProductsChart from './OverviewTopProductsChart';
 import dashboardLayoutStyles from './dashboard-layout.module.css';
 import styles from './overview.module.css';
 import {
@@ -12,8 +14,25 @@ import {
   getMockOverviewKpiComparison,
   mapDashboardOverviewToKpiCards,
   getOverviewPageTitle,
+  getOverviewPeriodLabel,
+  getMockOverviewOrderCountSeries,
+  mapDashboardOverviewToSalesChart,
+  mapDashboardOverviewToTopProductsChart,
 } from './overview-data';
 import { OVERVIEW_PERIOD_FILTER_OPTIONS } from './overview-mock-data';
+
+// 왼쪽 차트 카드 제목/보조문구. 목업(dashboard_mock.html)의 문구를 그대로
+// 따른다(새 업무 규칙 없음, 단순 매핑).
+const SALES_CHART_TITLE = {
+  TODAY: '시간대별 매출',
+  '7D': '일별 매출',
+  '30D': '일별 매출',
+};
+const SALES_CHART_SUBTITLE = {
+  TODAY: '오늘 · 결제 완료 기준',
+  '7D': '최근 1주일 · KST 결제 완료 기준',
+  '30D': '최근 1개월 · KST 결제 완료 기준',
+};
 
 // trend → 시각 기호/톤 클래스 매핑(새 판정 로직 없음 — trend 자체는
 // overview-data.js의 mapDashboardOverviewToKpiCards가 이미 판정해 넘겨준
@@ -83,6 +102,19 @@ export default function OverviewPageContent() {
     overviewResponse,
     kpiComparison
   );
+  const periodLabel = getOverviewPeriodLabel(queryState.period);
+
+  // 매출·결제 건수 Mixed Chart와 판매 상위 품목 Doughnut도 같은 패턴이다
+  // — 실제 응답과 provisional 시계열을 각각 조회한 뒤, 결합·파생은
+  // overview-data.js의 매핑 함수에만 맡긴다(label join, 합계, ratio 계산
+  // 전부 이 컴포넌트에서 하지 않음).
+  const orderCountSeries = getMockOverviewOrderCountSeries(queryState.period);
+  const salesChartData = mapDashboardOverviewToSalesChart(
+    overviewResponse,
+    orderCountSeries
+  );
+  const topProductsChartData =
+    mapDashboardOverviewToTopProductsChart(overviewResponse);
 
   return (
     <section className={dashboardLayoutStyles.page}>
@@ -124,6 +156,38 @@ export default function OverviewPageContent() {
               <KpiChange trend={card.trend} changePct={card.changePct} />
             </Card>
           ))}
+        </div>
+        <div className={styles.chartGrid}>
+          <Card className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h2 className={styles.chartTitle}>
+                {SALES_CHART_TITLE[queryState.period]}
+              </h2>
+              <span className={styles.chartSubtitle}>
+                {SALES_CHART_SUBTITLE[queryState.period]}
+              </span>
+            </div>
+            <div className={styles.chartBody}>
+              <OverviewSalesChart
+                periodLabel={periodLabel}
+                salesChartData={salesChartData}
+              />
+            </div>
+          </Card>
+          <Card className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h2 className={styles.chartTitle}>판매 상위 품목</h2>
+              <span className={styles.chartSubtitle}>
+                {`${periodLabel} · 판매 수량 비중`}
+              </span>
+            </div>
+            <div className={styles.chartBody}>
+              <OverviewTopProductsChart
+                periodLabel={periodLabel}
+                topProductsChartData={topProductsChartData}
+              />
+            </div>
+          </Card>
         </div>
       </div>
     </section>

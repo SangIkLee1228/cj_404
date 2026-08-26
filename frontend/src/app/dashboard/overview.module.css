@@ -96,3 +96,210 @@
 .kpiChangeIcon {
   flex-shrink: 0;
 }
+
+/* ---- Chart Grid(OV-2) ---- */
+
+/* 왼쪽 매출+결제 건수 Mixed Chart, 오른쪽 판매 상위 품목 Doughnut. 목업
+   (dashboard_mock.html)의 .grid2(약 1.4fr/.85fr) 비율을 그대로 따른다. */
+.chartGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* 중간 화면 이하: 두 차트 카드를 세로로 쌓는다. */
+@media (max-width: 1100px) {
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chartTitle {
+  margin: 0;
+  color: var(--dashboard-color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chartSubtitle {
+  color: var(--dashboard-color-text-muted);
+  font-size: 10px;
+}
+
+.chartBody {
+  min-width: 0;
+}
+
+/* Mixed Chart(Bar+Line) 높이는 CSS로만 관리한다 — canvas에 고정
+   width/height attribute를 직접 지정하지 않고, Chart.js의
+   responsive:true + maintainAspectRatio:false가 이 컨테이너 크기에 맞춰
+   다시 그리게 한다. */
+.salesChartContainer {
+  position: relative;
+  height: 230px;
+}
+
+@media (min-width: 1101px) {
+  .salesChartContainer {
+    height: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .salesChartContainer {
+    height: 200px;
+  }
+}
+
+/* 스크린 리더 전용 텍스트/데이터 목록. 색상 값이 없는 순수 레이아웃
+   유틸리티라 --dashboard-* 토큰과 무관하다. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chartEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 판매 상위 품목 Doughnut 레이아웃: 큰 화면은 canvas+legend를 가로로,
+   좁은 화면은 세로로 쌓는다. */
+/* 판매 상위 품목 도넛 팔레트. frontend/docs/dashboard_mock.html의 판매
+   상위 품목 차트 팔레트 값을 그대로 옮긴 것으로, 목업 일치 보완(OV-2
+   보완)을 위해서만 이 페이지 범위에 정의한다 — 공통 Dashboard theme
+   토큰(dashboard-theme.module.css)과는 무관하다. */
+.doughnutLayout {
+  --overview-top-product-color-1: #ff6b19;
+  --overview-top-product-color-2: #f4ad14;
+  --overview-top-product-color-3: #92bf2d;
+  --overview-top-product-color-4: #0e7a60;
+  --overview-top-product-color-5: #3791d0;
+  --overview-top-product-other-color: #687983;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .doughnutLayout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.doughnutCanvasWrapper {
+  position: relative;
+  flex-shrink: 0;
+  width: 150px;
+  height: 150px;
+  margin: 0 auto;
+}
+
+@media (min-width: 1101px) {
+  .doughnutCanvasWrapper {
+    width: 170px;
+    height: 170px;
+  }
+}
+
+/* 중앙 오버레이(판매 수량 합계). Tooltip·hover 등 canvas 인터랙션을
+   가리지 않도록 pointer-events를 끈다. */
+.doughnutCenterOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.doughnutCenterValue {
+  color: var(--dashboard-color-text-primary);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.doughnutCenterLabel {
+  margin-top: 2px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* Chart.js 기본 legend 대신 쓰는 DOM legend(접근성 있는 실제 텍스트
+   역할도 겸함 — 상품명/수량/비율). */
+.chartLegend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chartLegendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.chartLegendSwatch {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.chartLegendName {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--dashboard-color-text-primary);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chartLegendQty {
+  flex-shrink: 0;
+  color: var(--dashboard-color-text-muted);
+}
+
+.chartLegendRatio {
+  flex-shrink: 0;
+  min-width: 36px;
+  color: var(--dashboard-color-text-primary);
+  font-weight: 800;
+  text-align: right;
+}

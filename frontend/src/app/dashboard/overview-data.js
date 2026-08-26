@@ -22,9 +22,17 @@
 //   5) getOverviewPeriodLabel         — 기간 값 → 화면 표시용 라벨
 //   6) formatOverviewDateTime         — timezone 기준 시각 포맷
 //   7) formatWon                      — 금액 포맷
+//   8) getMockOverviewOrderCountSeries   — (API 연결 전 임시, provisional)
+//                                        결제 건수 시계열 Mock 조회
+//   9) mapDashboardOverviewToSalesChart  — 응답 + provisional 결제 건수
+//                                        시계열 → 매출/결제 건수 Mixed
+//                                        Chart view model
+//   10) mapDashboardOverviewToTopProductsChart — 응답 → 판매 상위 품목
+//                                        Doughnut Chart view model
 import {
   OVERVIEW_MOCK_RESPONSES,
   OVERVIEW_MOCK_KPI_COMPARISONS,
+  OVERVIEW_MOCK_ORDER_COUNT_SERIES,
 } from './overview-mock-data';
 
 const VALID_PERIODS = ['TODAY', '7D', '30D'];
@@ -175,4 +183,129 @@ export function mapDashboardOverviewToKpiCards(response, comparison) {
       trend: itemQtyChangePct === null ? null : resolveTrend(itemQtyChangePct),
     },
   ];
+}
+
+// API 연결 전 임시, PROVISIONAL: 실제 API에는 없는 시간대별/일별 결제
+// 건수 시계열만 조회한다. 실제 응답(queryMockDashboardOverview)과는
+// 완전히 별개의 함수·데이터 소스이며, 절대 한 객체로 합쳐 반환하지
+// 않는다 — 결합은 mapDashboardOverviewToSalesChart에서만 한다.
+export function getMockOverviewOrderCountSeries(period) {
+  const resolvedPeriod = resolvePeriod(period);
+  return OVERVIEW_MOCK_ORDER_COUNT_SERIES[resolvedPeriod];
+}
+
+// 실제 응답(response.sales_chart)과 provisional 결제 건수 시계열
+// (orderCountSeries)을 합쳐 Mixed Chart(매출 막대 + 결제 건수 선) view
+// model을 만든다. label이 위치별로 정확히 일치하는 항목만 결합하고,
+// provisional 시계열이 없거나 길이/label이 어긋나면 orderCounts를 빈
+// 배열로, hasOrderCountSeries를 false로 돌려준다 — 화면은 이 플래그만
+// 보고 매출 막대만 안전하게 그릴 수 있다(렌더링 오류 없음). 컴포넌트가
+// 두 시계열을 다시 join할 필요가 없도록 이 함수가 대신 결합해 둔다.
+export function mapDashboardOverviewToSalesChart(response, orderCountSeries) {
+  const points = response.sales_chart.points;
+  const labels = points.map((point) => point.label);
+  const amounts = points.map((point) => point.amount);
+
+  const orderCountByLabel = new Map(
+    (orderCountSeries ?? []).map((point) => [point.label, point.order_count])
+  );
+  const alignedOrderCounts = labels.map((label) =>
+    orderCountByLabel.get(label)
+  );
+  const hasOrderCountSeries =
+    Array.isArray(orderCountSeries) &&
+    orderCountSeries.length === labels.length &&
+    alignedOrderCounts.every((value) => Number.isInteger(value));
+
+  return {
+    unit: response.sales_chart.unit,
+    labels,
+    amounts,
+    orderCounts: hasOrderCountSeries ? alignedOrderCounts : [],
+    hasOrderCountSeries,
+  };
+}
+
+const MAX_TOP_PRODUCTS = 5;
+const OTHER_ITEM_LABEL = '기타';
+
+function toFiniteNonNegative(value) {
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+// response.top_products(이미 sold_qty 내림차순으로 정렬된 상태)에서 상위
+// 5개만 쓰고, 그 뒤에 "기타"(기간 전체 수량 중 상위 5개를 뺀 나머지)를
+// 더해 Doughnut Chart view model로 변환한다. 순서는 다시 정렬하지 않고
+// API가 준 순서 그대로 쓴다.
+//
+// overallTotal은 top_products 합계가 아니라 response.kpi.item_qty(기간
+// 전체 판매 수량)를 기준으로 삼는다 — 그래야 "기타"가 실제 의미를 갖고,
+// 도넛 중앙·범례 비율의 분모도 항상 기간 전체 수량이 된다. 다만
+// kpi.item_qty가 없거나 숫자가 아니거나(비정상 응답) 상위 5개 합계보다
+// 작은 비정상 상황(topProductsTotal > overallTotal)에서는 음수 "기타"를
+// 만들지 않도록 overallTotal을 topProductsTotal 아래로 내려가지 않게
+// 방어한다 — 정상 응답이라면 kpi.item_qty >= topProductsTotal이 항상
+// 성립하므로 이 방어는 정상 데이터의 실제 값을 바꾸지 않는다.
+export function mapDashboardOverviewToTopProductsChart(response) {
+  const topProducts = Array.isArray(response?.top_products)
+    ? response.top_products
+    : [];
+
+  // top_products가 아예 비어 있으면(정상적인 빈 결과든, kpi.item_qty만
+  // 있고 top_products가 없는 비정상 응답이든) 화면은 항상 기존 빈 상태를
+  // 유지해야 한다 — kpi.item_qty만으로 "기타" 100%짜리 가짜 상품 데이터를
+  // 만들어 채우지 않는다. items가 비어 있으면 컴포넌트가 빈 상태 UI를
+  // 그대로 그린다.
+  if (topProducts.length === 0) {
+    return { labels: [], values: [], total: 0, items: [] };
+  }
+
+  const topFive = topProducts.slice(0, MAX_TOP_PRODUCTS);
+
+  const topProductsTotal = topFive.reduce(
+    (sum, item) => sum + toFiniteNonNegative(item?.sold_qty),
+    0
+  );
+
+  const overallTotal = Math.max(
+    toFiniteNonNegative(response?.kpi?.item_qty),
+    topProductsTotal
+  );
+  const otherQty = Math.max(0, overallTotal - topProductsTotal);
+
+  function computeRatio(quantity) {
+    return overallTotal > 0
+      ? Math.round((quantity / overallTotal) * 1000) / 10
+      : 0;
+  }
+
+  const items = topFive.map((item, index) => {
+    const quantity = toFiniteNonNegative(item?.sold_qty);
+    return {
+      productId: item?.product_id ?? null,
+      label: item?.product_name ?? '',
+      quantity,
+      ratio: computeRatio(quantity),
+      colorIndex: index,
+      isOther: false,
+    };
+  });
+
+  if (otherQty > 0) {
+    items.push({
+      productId: null,
+      label: OTHER_ITEM_LABEL,
+      quantity: otherQty,
+      ratio: computeRatio(otherQty),
+      colorIndex: items.length,
+      isOther: true,
+    });
+  }
+
+  return {
+    labels: items.map((item) => item.label),
+    values: items.map((item) => item.quantity),
+    total: overallTotal,
+    items,
+  };
 }

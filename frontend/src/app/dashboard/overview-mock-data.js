@@ -381,3 +381,75 @@ export const OVERVIEW_MOCK_KPI_COMPARISONS = {
     item_qty_change_pct: 0,
   },
 };
+
+// 결제 건수 시계열 포인트를 만든다. buildAmountPoints와 같은 순환 가중치
+// 패턴·반올림 보정 방식을 쓰되 필드명이 amount가 아니라 order_count다 —
+// 기존 buildAmountPoints와 실제 매출 시계열(TODAY_SALES_POINTS 등)은
+// 전혀 건드리지 않고 이 함수만 새로 추가한다. WEIGHT_CYCLE은 이미
+// 정의된 상수를 읽기만 한다(수정하지 않음).
+function buildOrderCountPoints(count, total, labelFn) {
+  const weights = Array.from(
+    { length: count },
+    (_, i) => WEIGHT_CYCLE[i % WEIGHT_CYCLE.length]
+  );
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  const counts = weights.map((w) => Math.round((total * w) / weightSum));
+  const roundingDiff = total - counts.reduce((sum, c) => sum + c, 0);
+  counts[counts.length - 1] += roundingDiff;
+  return counts.map((order_count, i) => ({ label: labelFn(i), order_count }));
+}
+
+// label은 각 amount 시계열 포인트의 label을 그대로 읽어서 쓴다(날짜 계산을
+// 다시 하지 않음) — 그래야 amount 시계열과 order_count 시계열이 위치별로
+// 항상 정확히 같은 label을 갖는다는 게 재계산 실수 없이 구조적으로
+// 보장된다.
+const TODAY_ORDER_COUNT_POINTS = buildOrderCountPoints(
+  15,
+  TODAY_ORDER_COUNT,
+  (i) => TODAY_SALES_POINTS[i].label
+);
+
+const PREV_6_DAYS_ORDER_COUNT_TOTAL = SEVEN_D_ORDER_COUNT - TODAY_ORDER_COUNT;
+const PREV_23_DAYS_ORDER_COUNT_TOTAL =
+  THIRTY_D_ORDER_COUNT - SEVEN_D_ORDER_COUNT;
+
+const TODAY_DAY_ORDER_COUNT_POINT = {
+  label: TODAY_DAY_POINT.label,
+  order_count: TODAY_ORDER_COUNT,
+};
+
+const PREV_6_DAYS_ORDER_COUNT_POINTS = buildOrderCountPoints(
+  6,
+  PREV_6_DAYS_ORDER_COUNT_TOTAL,
+  (i) => PREV_6_DAYS_POINTS[i].label
+);
+
+const PREV_23_DAYS_ORDER_COUNT_POINTS = buildOrderCountPoints(
+  23,
+  PREV_23_DAYS_ORDER_COUNT_TOTAL,
+  (i) => PREV_23_DAYS_POINTS[i].label
+);
+
+// 7D = 이전 6일 + 오늘, 30D = 이전 23일 + 7D 전체 — amount 시계열과 동일한
+// 중첩 구성이라, 30D의 마지막 7개는 정의상 SEVEN_D_ORDER_COUNT_POINTS와
+// 완전히 동일하다.
+const SEVEN_D_ORDER_COUNT_POINTS = [
+  ...PREV_6_DAYS_ORDER_COUNT_POINTS,
+  TODAY_DAY_ORDER_COUNT_POINT,
+];
+const THIRTY_D_ORDER_COUNT_POINTS = [
+  ...PREV_23_DAYS_ORDER_COUNT_POINTS,
+  ...SEVEN_D_ORDER_COUNT_POINTS,
+];
+
+// PROVISIONAL API PROPOSAL:
+// 현재 GET /api/dashboard/overview의 sales_chart.points에는
+// 시간대별/일별 결제 건수가 없다.
+// 목업의 매출+결제 건수 Mixed Chart를 구성하기 위한 Mock 보충값이다.
+// 백엔드 협의 후 points[].order_count가 실제 계약에 추가되면 이 별도
+// Mock 시계열을 제거하고 실제 응답 필드로 교체해야 한다.
+export const OVERVIEW_MOCK_ORDER_COUNT_SERIES = {
+  TODAY: TODAY_ORDER_COUNT_POINTS,
+  '7D': SEVEN_D_ORDER_COUNT_POINTS,
+  '30D': THIRTY_D_ORDER_COUNT_POINTS,
+};
