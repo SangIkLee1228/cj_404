@@ -335,13 +335,40 @@
   overflow-y: auto;
 }
 
+/* table-layout:fixed + colgroup(아래)로 네 열 너비를 직접 지정한다 —
+   상품명 열이 width:100%로 남는 폭을 전부 가져가 수량·결제 금액이
+   오른쪽 끝으로 밀리던 문제를 고쳐, 목업처럼 네 열이 왼쪽부터 비교적
+   가까운 간격으로 배치되게 한다. */
 .recentTable {
   width: 100%;
-  min-width: 480px;
+  min-width: 640px;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
+.recentTimeColumn {
+  width: 90px;
+}
+
+.recentProductColumn {
+  width: 40%;
+}
+
+.recentQtyColumn {
+  width: 80px;
+}
+
+.recentAmountColumn {
+  width: auto;
+}
+
+/* 스크롤 중에도 열 제목을 볼 수 있도록 sticky header로 고정한다.
+   background/color/font/정렬/padding/border는 기존 값을 그대로
+   유지하고 위치 속성만 추가한다. */
 .recentTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 10px 18px;
   border-bottom: 1px solid var(--dashboard-color-card-divider);
   background: var(--dashboard-color-background);
@@ -364,16 +391,23 @@
   border-bottom: 0;
 }
 
-/* 시간·수량·결제 금액은 불필요하게 줄바꿈되지 않게 하고, 상품 구성
-   열이 남는 가로 공간을 우선 차지하게 한다. */
-.recentTimeCell,
-.recentQtyCell,
-.recentAmountCell {
+/* 시간·수량·결제 금액은 불필요하게 줄바꿈되지 않게 한다. 수량·결제
+   금액은 오른쪽 정렬하지 않고 목업처럼 왼쪽 정렬을 명시적으로
+   유지한다. */
+.recentTimeCell {
   white-space: nowrap;
 }
 
+.recentQtyCell,
+.recentAmountCell {
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* 상품명 열은 이제 colgroup의 .recentProductColumn(40%)이 너비를
+   정하므로 width:100%를 두지 않는다 — 긴 상품명은 그 폭 안에서
+   ellipsis 처리한다. */
 .recentProductCell {
-  width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -383,9 +417,16 @@
   font-weight: 700;
 }
 
+/* 데이터가 없을 때도 카드 본문이 지나치게 좁거나 높지 않도록 최소
+   높이를 두고, flex로 가로·세로 모두 중앙 정렬한다(기존 padding만으로는
+   가로 중앙 정렬만 되던 것을 보완). */
 .recentEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
   margin: 0;
-  padding: 40px 16px;
+  padding: 16px;
   color: var(--dashboard-color-text-muted);
   font-size: 12px;
   text-align: center;
