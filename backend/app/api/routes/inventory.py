@@ -30,7 +30,7 @@ logger = structlog.get_logger("app.inventory")
 
 _SELECT = (
     "product_id, produced_qty, sold_qty, remaining_qty, updated_at,"
-    " product!inner(product_name, product_type, category)"
+    " product!inner(product_name, product_type, category, image_url)"
 )
 
 # "조치 필요 항목이 위" (API명세서 1.3) - OUT/LOW를 OK보다 먼저 보여준다.
@@ -61,6 +61,7 @@ def _to_item(row: dict, baseline_pct: int) -> InventoryListItem:
         product_name=product["product_name"],
         product_type=product["product_type"],
         category=product.get("category"),
+        image_url=product.get("image_url"),
         produced_qty=produced,
         sold_qty=row["sold_qty"],
         remaining_qty=remaining,
@@ -88,6 +89,7 @@ def list_inventory(
     stock_status: str = Query(default="ALL", alias="status", pattern="^(ALL|LOW|OUT)$"),
     q: str | None = Query(default=None, description="상품명 검색"),
     product_type: str | None = Query(default=None, pattern="^(BREAD|DRINK)$"),
+    category: str | None = Query(default=None, description="목업의 카테고리 셀렉트"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     staff: StaffContext = Depends(get_staff_context),
@@ -101,6 +103,8 @@ def list_inventory(
     query = supabase.table("inventory").select(_SELECT).eq("store_id", staff.store_id)
     if product_type:
         query = query.eq("product.product_type", product_type)
+    if category:
+        query = query.eq("product.category", category)
     if q:
         query = query.ilike("product.product_name", f"%{q}%")
 

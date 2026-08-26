@@ -16,6 +16,8 @@ from app.core.supabase_client import get_supabase
 from app.schemas.notifications import (
     NotificationListItem,
     NotificationListResponse,
+    NotificationSeverity,
+    NotificationSummary,
     ReadAllResponse,
     UnreadCountResponse,
 )
@@ -30,6 +32,34 @@ _SELECT = (
 )
 
 
+def _severity(row: dict) -> NotificationSeverity:
+    """목업 알림 필터가 "재고 부족 / 매진"으로 갈리는데 notif_type은 STOCK_LOW 하나뿐이라
+    수량 스냅샷에서 파생한다.
+
+    아래 _apply_severity_filter의 DB 조건과 **반드시 짝을 이뤄야** 한다. 한쪽만 고치면
+    목록에 뜨는 배지와 필터 결과가 어긋난다.
+    """
+    if row["notif_type"] != "STOCK_LOW":
+        return "INFO"
+    snapshot = row.get("remaining_qty_snapshot")
+    # 스냅샷이 없는 재고 알림은 수량을 모를 뿐 매진은 아니므로 LOW로 본다.
+    return "OUT" if snapshot is not None and snapshot <= 0 else "LOW"
+
+
+def _apply_severity_filter(query, severity: str):
+    """_severity와 동일한 규칙을 DB 조건으로 옮긴 것.
+
+    파생 필드라 Python에서 거르면 total·페이지네이션이 어긋나므로 DB에서 건다.
+    """
+    if severity == "OUT":
+        return query.eq("notif_type", "STOCK_LOW").lte("remaining_qty_snapshot", 0)
+    if severity == "LOW":
+        return query.eq("notif_type", "STOCK_LOW").or_(
+            "remaining_qty_snapshot.gt.0,remaining_qty_snapshot.is.null"
+        )
+    return query.neq("notif_type", "STOCK_LOW")  # INFO
+
+
 def _to_item(row: dict) -> NotificationListItem:
     product = row.get("product")
     product_name = product.get("product_name") if product else None
@@ -41,22 +71,34 @@ def _to_item(row: dict) -> NotificationListItem:
         title=row["title"],
         message=row["message"],
         remaining_qty_snapshot=row.get("remaining_qty_snapshot"),
+        severity=_severity(row),
         is_read=row["is_read"],
         created_at=row["created_at"],
     )
 
 
-def _unread_count(store_id: int) -> int:
-    supabase = get_supabase()
-    result = (
-        supabase.table("notification")
+def _live_notifications(store_id: int):
+    """미삭제 알림 카운트 쿼리의 공통 시작점. execute() 후에는 재사용할 수 없어 매번 새로 만든다."""
+    return (
+        get_supabase()
+        .table("notification")
         .select("notification_id", count="exact")
         .eq("store_id", store_id)
         .eq("is_deleted", False)
-        .eq("is_read", False)
-        .execute()
     )
-    return result.count or 0
+
+
+def _unread_count(store_id: int) -> int:
+    return _live_notifications(store_id).eq("is_read", False).execute().count or 0
+
+
+def _summary(store_id: int) -> NotificationSummary:
+    """목업 상단 "2 매진 · 3 재고 부족 · 5 안읽음". 필터와 무관하게 매장 전체 기준이다."""
+    return NotificationSummary(
+        out_count=_apply_severity_filter(_live_notifications(store_id), "OUT").execute().count or 0,
+        low_count=_apply_severity_filter(_live_notifications(store_id), "LOW").execute().count or 0,
+        unread_count=_unread_count(store_id),
+    )
 
 
 def _require_owned(notification_id: int, store_id: int) -> None:
@@ -77,6 +119,11 @@ def _require_owned(notification_id: int, store_id: int) -> None:
 @router.get("", response_model=NotificationListResponse)
 def list_notifications(
     is_read: bool | None = Query(default=None),
+    severity: str | None = Query(
+        default=None,
+        pattern="^(OUT|LOW|INFO)$",
+        description="목업 필터: OUT=매진 · LOW=재고 부족 · INFO=시스템",
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     staff: StaffContext = Depends(get_staff_context),
@@ -91,17 +138,21 @@ def list_notifications(
     )
     if is_read is not None:
         query = query.eq("is_read", is_read)
+    if severity:
+        query = _apply_severity_filter(query, severity)
 
     result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     items = [_to_item(row) for row in result.data]
     updated_at = max((item.created_at for item in items), default=datetime.now(UTC))
+    summary = _summary(staff.store_id)
 
     return NotificationListResponse(
         items=items,
         total=result.count or 0,
         limit=limit,
         offset=offset,
-        unread_count=_unread_count(staff.store_id),
+        unread_count=summary.unread_count,
+        summary=summary,
         updated_at=updated_at,
     )
 
