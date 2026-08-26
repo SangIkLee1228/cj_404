@@ -335,31 +335,13 @@
   overflow-y: auto;
 }
 
-/* table-layout:fixed + colgroup(아래)로 네 열 너비를 직접 지정한다 —
-   상품명 열이 width:100%로 남는 폭을 전부 가져가 수량·결제 금액이
-   오른쪽 끝으로 밀리던 문제를 고쳐, 목업처럼 네 열이 왼쪽부터 비교적
-   가까운 간격으로 배치되게 한다. */
+/* 목업(dashboard_mock.html)처럼 별도 열 너비 지정 없이 기본
+   table-layout: auto(생략 시 기본값)를 그대로 쓴다 — 콘텐츠 길이를
+   기준으로 브라우저가 열 너비를 자연스럽게 배분한다. */
 .recentTable {
   width: 100%;
   min-width: 640px;
-  table-layout: fixed;
   border-collapse: collapse;
-}
-
-.recentTimeColumn {
-  width: 90px;
-}
-
-.recentProductColumn {
-  width: 40%;
-}
-
-.recentQtyColumn {
-  width: 80px;
-}
-
-.recentAmountColumn {
-  width: auto;
 }
 
 /* 스크롤 중에도 열 제목을 볼 수 있도록 sticky header로 고정한다.
@@ -404,9 +386,9 @@
   white-space: nowrap;
 }
 
-/* 상품명 열은 이제 colgroup의 .recentProductColumn(40%)이 너비를
-   정하므로 width:100%를 두지 않는다 — 긴 상품명은 그 폭 안에서
-   ellipsis 처리한다. */
+/* 상품명 열은 별도 고정 너비를 두지 않고 table-layout: auto의 자연스러운
+   배분에 맡긴다 — 브라우저가 배분한 폭 안에서 긴 상품명만 ellipsis
+   처리한다. */
 .recentProductCell {
   overflow: hidden;
   white-space: nowrap;

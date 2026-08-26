@@ -29,12 +29,6 @@ export default function OverviewRecentOrders({ periodLabel, recentOrders }) {
             className={styles.recentTable}
             aria-label="운영 현황 최근 판매 내역"
           >
-            <colgroup>
-              <col className={styles.recentTimeColumn} />
-              <col className={styles.recentProductColumn} />
-              <col className={styles.recentQtyColumn} />
-              <col className={styles.recentAmountColumn} />
-            </colgroup>
             <thead>
               <tr>
                 <th scope="col">시간</th>
