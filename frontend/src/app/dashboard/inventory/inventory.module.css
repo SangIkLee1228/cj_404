@@ -130,3 +130,155 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* NoticeCard와 재고 표(TableCard)를 목업과 비슷한 간격(14px)으로
+   쌓는다. dashboard-layout.module.css의 pageContent를 중첩하지 않고, 이
+   페이지 전용 stack 하나만 그 안에 둔다. */
+.contentStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 재고 목록 표(F1-6A). 좁은 화면에서는 페이지 전체가 아니라 이 wrapper
+   안에서만 가로 스크롤되도록 한다(min-width는 table 쪽에 둔다). */
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+/* 헤더 배경·텍스트 색은 이 저장소에 이미 있는 Dashboard 표 스타일
+   (ui-preview/ui-preview.module.css의 .tableWrap th/td)과 동일한 토큰
+   조합을 그대로 따른다. */
+.table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.nowrapCell {
+  white-space: nowrap;
+}
+
+.productCell {
+  max-width: 220px;
+}
+
+/* 긴 상품명이 표 레이아웃을 밀어내지 않도록 상한을 두고 한 줄 유지 후
+   말줄임 처리한다(title로 전체 이름 제공). */
+.productName {
+  overflow: hidden;
+  max-width: 200px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.productCategory {
+  overflow: hidden;
+  max-width: 200px;
+  margin-top: 2px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.remainingQty {
+  font-weight: 700;
+}
+
+.stockRate {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* track/fill 색은 dashboard-theme.module.css의 신규 토큰
+   (--dashboard-color-stock-meter-track/-fill, dashboard_mock.html 근거는
+   해당 토큰 주석 참고)을 그대로 쓴다. */
+.stockMeter {
+  flex-shrink: 0;
+  width: 110px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--dashboard-color-stock-meter-track);
+}
+
+.stockMeterFill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--dashboard-color-stock-meter-fill);
+}
+
+.stockRateText {
+  flex-shrink: 0;
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* LOW/OUT 행 강조. 목업의 옅은 색조를 임의 hex 없이 재현하기 위해 기존
+   상태 배경 토큰을 color-mix()로 surface와 섞는다(모든 최신 evergreen
+   브라우저가 지원). hover 시 비율을 조금 높여 상태 의미가 hover에서도
+   유지되게 한다. .table 아래로만 적용되도록 전역이 아닌 로컬 클래스
+   기준으로 범위를 좁혔다. */
+.table tbody tr[data-status='low'] td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-low-background) 25%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='low']:hover td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-low-background) 35%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='out'] td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-out-background) 25%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='out']:hover td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-out-background) 35%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.tableEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}

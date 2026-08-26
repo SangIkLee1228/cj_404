@@ -7,11 +7,14 @@ import SelectControl from '../components/ui/SelectControl';
 import NoticeCard from '../components/ui/NoticeCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import Button from '../components/ui/Button';
+import TableCard from '../components/ui/TableCard';
 import dashboardLayoutStyles from '../dashboard-layout.module.css';
 import styles from './inventory.module.css';
 import {
   DEFAULT_INVENTORY_QUERY,
   getUrgentRestockBread,
+  queryMockInventoryList,
+  mapInventoryResponseToPageInfo,
 } from './inventory-data';
 import {
   PRODUCT_TYPE_FILTER_OPTIONS,
@@ -20,11 +23,10 @@ import {
   INVENTORY_MOCK_RESPONSE,
 } from './inventory-mock-data';
 
-// F1-4는 조회 상태(queryState)만 관리한다. queryMockInventoryList /
-// mapInventoryResponseToPageInfo 호출과 그 결과를 실제로 화면에 그리는 일은
-// F1-6(재고 표·페이지네이션)의 몫이다 — 여기서 호출해봐야 아직 아무 데도
-// 쓰이지 않는 값을 만들 뿐이라, queryState를 그 함수들에 바로 넘길 수 있는
-// 형태로 정확히 준비해 두는 것까지만 이 단계의 책임으로 둔다.
+// F1-4는 조회 상태(queryState)만 관리했다. F1-6A부터는 이 queryState를
+// queryMockInventoryList → mapInventoryResponseToPageInfo로 그대로 이어
+// 현재 페이지 재고 표를 렌더링한다(이전/다음 버튼과 페이지 요약 문구는
+// F1-6B의 몫).
 
 // "지금 채워야 할 빵" 긴급 보충 영역은 상단 필터와 무관하게 매장 전체
 // 기준으로 항상 같은 대상을 보여줘야 한다(inventory-data.js의 데이터 계약
@@ -35,11 +37,11 @@ const URGENT_RESTOCK_BREAD = getUrgentRestockBread(
   INVENTORY_MOCK_RESPONSE.items
 );
 
-// getUrgentRestockBread가 돌려주는 stock_status(LOW/OUT)의 한글 표시 라벨.
-// 화면 문구 자체는 "추정 N개"로 통일하고, 이 라벨은 StatusBadge의
-// aria-label에 상태 의미를 보태는 용도로만 쓴다 — 상태 자체를 여기서 새로
-// 판정하지 않는다.
-const URGENT_STATUS_LABEL = { LOW: '재고 부족', OUT: '매진' };
+// API 응답의 stock_status/product_type 값을 화면 표시용 한글 라벨로
+// 매핑만 하는 상수(새 판정 로직 없음). NoticeCard의 StatusBadge
+// aria-label과 재고 표의 상태 열이 이 한글 라벨을 함께 재사용한다.
+const STOCK_STATUS_LABEL = { OK: '정상', LOW: '재고 부족', OUT: '매진' };
+const PRODUCT_TYPE_LABEL = { BREAD: '빵', DRINK: '음료' };
 
 export default function InventoryPageContent() {
   const [queryState, setQueryState] = useState(DEFAULT_INVENTORY_QUERY);
@@ -62,6 +64,12 @@ export default function InventoryPageContent() {
     const query = event.target.value;
     setQueryState((prev) => ({ ...prev, query, page: 1 }));
   }
+
+  // 30개 규모의 Mock 데이터를 매 렌더링마다 다시 조회해도 비용이 미미해
+  // useMemo 없이 단순 계산으로 둔다. 컴포넌트에서 직접 filter/sort/slice를
+  // 구현하지 않고, 두 함수의 반환값만 그대로 화면에 옮긴다.
+  const inventoryResponse = queryMockInventoryList(queryState);
+  const pageInfo = mapInventoryResponseToPageInfo(inventoryResponse);
 
   return (
     <section className={dashboardLayoutStyles.page}>
@@ -111,46 +119,151 @@ export default function InventoryPageContent() {
         }
       />
       <div className={dashboardLayoutStyles.pageContent}>
-        {URGENT_RESTOCK_BREAD.total > 0 ? (
-          <NoticeCard
-            title="지금 채워야 할 빵"
-            meta={
-              <>
-                {`${URGENT_RESTOCK_BREAD.total}개`}
-                {URGENT_RESTOCK_BREAD.remainingCount > 0 ? (
-                  <span className={styles.restockMore}>
-                    {` · 외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
-                  </span>
-                ) : null}
-              </>
-            }
-          >
-            <ul className={styles.restockChips}>
-              {URGENT_RESTOCK_BREAD.items.map((item) => (
-                <li key={item.product_id} className={styles.restockChip}>
-                  <span className={styles.restockChipName}>
-                    {item.product_name}
-                  </span>
-                  <StatusBadge
-                    status={item.stock_status.toLowerCase()}
-                    aria-label={`${URGENT_STATUS_LABEL[item.stock_status]}, 추정 재고 ${item.remaining_qty}개`}
-                  >
-                    {`추정 ${item.remaining_qty}개`}
-                  </StatusBadge>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    disabled
-                    title="재고 조정 기능 준비 중"
-                    aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
-                  >
-                    재고 조정
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </NoticeCard>
-        ) : null}
+        <div className={styles.contentStack}>
+          {URGENT_RESTOCK_BREAD.total > 0 ? (
+            <NoticeCard
+              title="지금 채워야 할 빵"
+              meta={
+                <>
+                  {`${URGENT_RESTOCK_BREAD.total}개`}
+                  {URGENT_RESTOCK_BREAD.remainingCount > 0 ? (
+                    <span className={styles.restockMore}>
+                      {` · 외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
+                    </span>
+                  ) : null}
+                </>
+              }
+            >
+              <ul className={styles.restockChips}>
+                {URGENT_RESTOCK_BREAD.items.map((item) => (
+                  <li key={item.product_id} className={styles.restockChip}>
+                    <span className={styles.restockChipName}>
+                      {item.product_name}
+                    </span>
+                    <StatusBadge
+                      status={item.stock_status.toLowerCase()}
+                      aria-label={`${STOCK_STATUS_LABEL[item.stock_status]}, 추정 재고 ${item.remaining_qty}개`}
+                    >
+                      {`추정 ${item.remaining_qty}개`}
+                    </StatusBadge>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled
+                      title="재고 조정 기능 준비 중"
+                      aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                    >
+                      재고 조정
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </NoticeCard>
+          ) : null}
+          <TableCard id="inventory-table">
+            {pageInfo.total === 0 ? (
+              <p className={styles.tableEmpty}>
+                선택한 조건에 해당하는 상품이 없습니다.
+              </p>
+            ) : (
+              <div
+                className={styles.tableWrapper}
+                tabIndex={0}
+                aria-label="재고 목록 표, 좌우로 스크롤 가능"
+              >
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th scope="col">상품</th>
+                      <th scope="col">구분</th>
+                      <th scope="col">초기/생산</th>
+                      <th scope="col">판매</th>
+                      <th scope="col">현재</th>
+                      <th scope="col">재고율</th>
+                      <th scope="col">상태</th>
+                      <th scope="col">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageInfo.items.map((item) => {
+                      const meterWidth = Math.min(
+                        100,
+                        Math.max(0, item.remaining_pct)
+                      );
+
+                      return (
+                        <tr
+                          key={item.product_id}
+                          data-status={item.stock_status.toLowerCase()}
+                        >
+                          <td className={styles.productCell}>
+                            <div
+                              className={styles.productName}
+                              title={item.product_name}
+                            >
+                              {item.product_name}
+                            </div>
+                            <div className={styles.productCategory}>
+                              {item.category ?? '미분류'}
+                            </div>
+                          </td>
+                          <td className={styles.nowrapCell}>
+                            {PRODUCT_TYPE_LABEL[item.product_type]}
+                          </td>
+                          <td className={styles.nowrapCell}>
+                            {`${item.produced_qty}개`}
+                          </td>
+                          <td className={styles.nowrapCell}>
+                            {`${item.sold_qty}개`}
+                          </td>
+                          <td className={styles.nowrapCell}>
+                            <span className={styles.remainingQty}>
+                              {`추정 ${item.remaining_qty}개`}
+                            </span>
+                          </td>
+                          <td>
+                            <div className={styles.stockRate}>
+                              <div
+                                className={styles.stockMeter}
+                                aria-hidden="true"
+                              >
+                                <span
+                                  className={styles.stockMeterFill}
+                                  style={{ width: `${meterWidth}%` }}
+                                />
+                              </div>
+                              <span className={styles.stockRateText}>
+                                {`${Math.round(item.remaining_pct)}%`}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <StatusBadge
+                              status={item.stock_status.toLowerCase()}
+                            >
+                              {STOCK_STATUS_LABEL[item.stock_status]}
+                            </StatusBadge>
+                          </td>
+                          <td>
+                            <Button
+                              type="button"
+                              variant="primary"
+                              disabled
+                              title="재고 조정 기능 준비 중"
+                              aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                            >
+                              재고 조정
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TableCard>
+        </div>
       </div>
     </section>
   );
