@@ -32,4 +32,14 @@
      (.top-btn.primary) 값이다. */
   --dashboard-color-brand-primary: #0a6c56;
   --dashboard-color-on-brand: #ffffff;
+
+  /* Card — HTML 목업 .card 규칙의 최종 cascade 값(border-color/
+     border-radius/box-shadow)을 그대로 옮긴 토큰이다. 배경은
+     --dashboard-color-surface를 재사용한다. */
+  --dashboard-color-card-border: #e0e8e4;
+  --dashboard-radius-card: 13px;
+  --dashboard-shadow-card: 0 3px 12px rgba(12, 56, 43, 0.055);
+
+  /* Card divider — HTML 목업 .section-head의 최종 border 색상 값이다. */
+  --dashboard-color-card-divider: #e6ece9;
 }
