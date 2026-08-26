@@ -1,0 +1,34 @@
+/* Dashboard 전용 NoticeCard. Dashboard theme 토큰(--dashboard-*)을 사용한다. */
+
+.noticeCard {
+  min-width: 0;
+  padding: 13px 16px;
+  border: 1px solid var(--dashboard-color-notice-border);
+  border-radius: var(--dashboard-radius-card);
+  background: var(--dashboard-color-notice-background);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--dashboard-color-notice-text);
+}
+
+.meta {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dashboard-color-text-muted);
+}
+
+.body {
+  min-width: 0;
+}

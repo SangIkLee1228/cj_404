@@ -42,4 +42,10 @@
 
   /* Card divider — HTML 목업 .section-head의 최종 border 색상 값이다. */
   --dashboard-color-card-divider: #e6ece9;
+
+  /* Notice — HTML 목업 .restock-strip.show(background/border)와
+     .restock-strip-head b(color)의 최종 cascade 값이다. */
+  --dashboard-color-notice-background: #fff8f3;
+  --dashboard-color-notice-border: #f3d2b8;
+  --dashboard-color-notice-text: #a8551f;
 }
