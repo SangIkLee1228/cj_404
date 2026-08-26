@@ -319,6 +319,15 @@
   border-bottom: 0;
 }
 
+/* 인식 방식 배지 + "검토 필요" 배지(있을 때만)를 한 셀 안에 나란히
+   배치한다. 좁은 셀에서는 줄바꿈을 허용한다. */
+.sourceCell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
 /* 정보 박스(CJ ONE 적립·인식 정정 여부). 목업의 .order-info-box(#f8f4ec)에
    정확히 대응하는 기존 토큰이 없어, 같은 계열의 --dashboard-color-notice-
    background를 재사용한다(임의 hex 없음). */
