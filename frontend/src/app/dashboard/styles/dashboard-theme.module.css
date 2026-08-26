@@ -48,4 +48,12 @@
   --dashboard-color-notice-background: #fff8f3;
   --dashboard-color-notice-border: #f3d2b8;
   --dashboard-color-notice-text: #a8551f;
+
+  /* Status — HTML 목업 .stock-status-pill.ok/.low/.out의 최종 값이다. */
+  --dashboard-color-status-ok-background: #e6f5ef;
+  --dashboard-color-status-ok-text: #19624e;
+  --dashboard-color-status-low-background: #fff0d5;
+  --dashboard-color-status-low-text: #8a601b;
+  --dashboard-color-status-out-background: #fde7e3;
+  --dashboard-color-status-out-text: #a43d31;
 }
