@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import styles from '../dashboard-layout.module.css';
 import { DASHBOARD_ROUTES, getDashboardRoute } from '../dashboard-routes';
+import Button from './ui/Button';
 
 export default function DashboardTopbar() {
   const pathname = usePathname();
@@ -25,13 +26,16 @@ export default function DashboardTopbar() {
         </div>
         {/* 아직 실제 동작이 없는 시각적 placeholder다. API 연동 전까지
             disabled로 둬 클릭 가능한 것처럼 보이지 않게 한다. */}
-        <button type="button" className={styles.topbarButton} disabled>
-          <RefreshCw className={styles.topbarButtonIcon} aria-hidden="true" />
+        <Button
+          variant="secondary"
+          leadingIcon={<RefreshCw aria-hidden="true" />}
+          disabled
+        >
           데이터 동기화
-        </button>
-        <button type="button" className={styles.topbarButton} disabled>
+        </Button>
+        <Button variant="primary" disabled>
           직원 POS 열기 ↗
-        </button>
+        </Button>
       </div>
     </header>
   );
