@@ -217,12 +217,11 @@ _ORDER_SELECT = "*, member(member_id, name, membership_grade(grade_code, grade_n
 
 def load_order(order_id: int, staff: StaffContext) -> dict:
     '''
-    주문 1 건을 읽고 접근 권한을 확인한다.
-    없으면 404, 다른 매장 주문이면 403.
+    주문 1 건을 읽고 접근 권한을 확인한다. 없으면 404, 다른 매장 주문이면 403.
     모든 주문 API 가 가장 먼저 부르는 함수다 - 여기를 통과한 order 는 '존재하고, 이 직원이 손대도 되는 주문' 이 보장된다.
     '''
     rows = (
-        get_superbase()
+        get_supabase()
         .table("orders")
         .select("*, member(member_id, name, membership_grade(grade_code, grade_name))")
         .eq("order_id", order_id)
@@ -338,3 +337,112 @@ def load_current_order(staff: StaffContext) -> dict | None:
         .execute()
     ).data
     return rows[0] if rows else None
+
+
+def load_store_price(product_id: int, store_id: int) -> int:
+    ''' 이 매장에서 판매 중인 상품의 현재 가격. 없거나 판매 중지면 404 '''
+    rows = (
+        get_supabase()
+        .table("store_product")
+        .select("price, is_active, product!inner(is_active)")
+        .eq("store_id", store_id)
+        .eq("product_id", product_id)
+        .limit(1)
+        .execute()
+    ).data
+
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "판매 중인 상품이 아닙니다.")
+
+    row = rows[0]
+    product = _embedded(row.get("product")) or {}
+    if not row["is_active"] or not product.get("is_active", True):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "판매 중인 상품이 아닙니다.")
+
+    return money(row["price"])
+
+
+def load_item(order_id: int, order_item_id: int) -> dict:
+    ''' 주문 항목 1건. 다른 주문의 항목이면 404 (부모-자식 일치 검증) '''
+    rows = (
+        get_supabase()
+        .table("order_item")
+        .select("order_item_id, product_id, quantity, unit_price, source_type")
+        .eq("order_item_id", order_item_id)
+        .eq("order_id", order_id)
+        .limit(1)
+        .execute()
+    ).data
+
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "주문 항목을 찾을 수 없습니다.")
+    return rows[0]
+
+
+def add_quantity(order_id: int, product_id: int, quantity: int, unit_price: int, source_type: str) -> None:
+    ''''
+    동일 상품이 이미 있으면 수량 합산, 없으면 새 행 (명세서 4.5).
+
+    합산 시 source_type은 넘어온 값으로 승격한다 - AI가 넣은 항목을 직원이 더 담으면
+    "직원이 개입한 항목"으로 기록되어야 재학습 데이터가 정확해진다.
+    '''
+    supabase = get_supabase()
+    rows = (
+        supabase.table("order_item")
+        .select("order_item_id, quantity, unit_price")
+        .eq("order_id", order_id)
+        .eq("product_id", product_id)
+        .limit(1)
+        .execute()
+    ).data
+
+    if not rows:
+        supabase.table("order_item").insert(
+            {
+                "order_id": order_id,
+                "product_id": product_id,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "subtotal": line_subtotal(quantity, unit_price),
+                "source_type": source_type,
+            }
+        ).execute()
+        return
+
+    existing = rows[0]
+    merged = min(existing["quantity"] + quantity, MAX_ITEM_QUANTITY)
+    price = money(existing["unit_price"])   # 기존 행의 스냅샷 가격을 유지한다.
+    supabase.table("order_item").update(
+        {
+            "quantity": merged,
+            "subtotal": line_subtotal(merged, price),
+            "source_type": source_type,
+        }
+    ).eq("order_item_id", existing["order_item_id"]).execute()
+
+
+def set_item_quantity(item: dict, quantity: int) -> None:
+    '''
+    수량 변경 (FR-04). unit_price는 담을 때의 스냅샷을 그대로 쓴다.
+    '''
+    price = money(item["unit_price"])
+    get_supabase().table("order_item").update(
+        {
+            "quantity": quantity,
+            "subtotal": line_subtotal(quantity, price),
+            "source_type": "STAFF_CORRECTED",
+        }
+    ).eq("order_item_id", item["order_item_id"]).execute()
+
+
+def delete_item(order_item_id: int) -> None:
+    get_supabase().table("order_item").delete().eq(
+        "order_item_id", order_item_id).execute()
+
+
+def replace_item_product(order_id: int, item: dict, new_product_id: int, quantity: int, store_id: int) -> None:
+    ''' 상품 재선택 (FR-05). 대상 상품이 이미 담겨 있으면 합산 후 원래 행을 지운다. '''
+    unit_price = load_store_price(new_product_id, store_id)
+    delete_item(item["order_item_id"])
+    add_quantity(order_id, new_product_id, quantity,
+                 unit_price, "STAFF_CORRECTED")

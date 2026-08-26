@@ -1,10 +1,23 @@
 import structlog
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
-from app.schemas.orders import OrderDetail
-from app.services.orders import load_current_order, load_items, load_order, order_detail
+from app.schemas.orders import OrderDetail, OrderItemCreate, OrderItemUpdate
+from app.services.orders import (
+    add_quantity,
+    delete_item,
+    ensure_pending,
+    load_current_order,
+    load_item,
+    load_items,
+    load_order,
+    load_store_price,
+    order_detail,
+    recalculate,
+    replace_item_product,
+    set_item_quantity,
+)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 logger = structlog.get_logger("app.orders")
@@ -63,3 +76,65 @@ def get_order(order_id: int, staff: StaffContext = Depends(get_staff_context)):
     """주문 상세 (FR-17)."""
     order = load_order(order_id, staff)
     return order_detail(order, load_items(order_id))
+
+
+@router.post("/{order_id}/items", status_code=status.HTTP_201_CREATED, response_model=OrderDetail)
+def add_order_item(
+    order_id: int,
+    payload: OrderItemCreate,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """카탈로그·추천에서 상품 직접 담기 (FR-06)."""
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+
+    unit_price = load_store_price(payload.product_id, staff.store_id)
+    add_quantity(order_id, payload.product_id,
+                 payload.quantity, unit_price, "MANUAL_ADD")
+
+    order, items = recalculate(order)
+    return order_detail(order, items)
+
+
+@router.patch("/{order_id}/items/{order_item_id}", response_model=OrderDetail)
+def update_order_item(
+    order_id: int,
+    order_item_id: int,
+    payload: OrderItemUpdate,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """수량 변경(FR-04) 또는 상품 재선택(FR-05)."""
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+    item = load_item(order_id, order_item_id)
+
+    if payload.product_id is not None and payload.product_id != item["product_id"]:
+        replace_item_product(
+            order_id, item, payload.product_id, payload.quantity or item["quantity"], staff.store_id
+        )
+    elif payload.quantity is not None:
+        set_item_quantity(item, payload.quantity)
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "quantity 또는 product_id 중 하나는 보내야 합니다"
+        )
+
+    order, items = recalculate(order)
+    return order_detail(order, items)
+
+
+@router.delete("/{order_id}/items/{order_item_id}", response_model=OrderDetail)
+def remove_order_item(
+    order_id: int,
+    order_item_id: int,
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """항목 삭제 (FR-04). 응답은 갱신된 주문 전체."""
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+    item = load_item(order_id, order_item_id)
+
+    delete_item(item["order_item_id"])
+
+    order, items = recalculate(order)
+    return order_detail(order, items)

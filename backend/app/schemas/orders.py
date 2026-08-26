@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.codes import MembershipGradeCode, OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
 
@@ -62,7 +62,7 @@ class PointTransaction(BaseModel):
     created_at: datetime
 
 
-class OrderMemberSummary (BaseModel):
+class OrderMemberSummary(BaseModel):
     ''' 주문에 연결된 회원 요약. 이름은 서버가 마스킹해 내보낸다. '''
     member_id: int
     name: str
@@ -99,3 +99,15 @@ class OrderDetail(BaseModel):
     point_used: int
     correction_count: int = 0
     items: list[OrderItemRead]
+
+
+class OrderItemCreate(BaseModel):
+    ''' POST /orders/{id}/items 요청 '''
+    product_id: int
+    quantity: int = Field(default=1, ge=1, le=99)
+
+
+class OrderItemUpdate(BaseModel):
+    ''' PATCH /orers/{id}/items/{items_id} 요청. 수량 변경 또는 상품 재선택 '''
+    quantity: int | None = Field(default=None, ge=1, le=99)
+    product_id: int | None = None
