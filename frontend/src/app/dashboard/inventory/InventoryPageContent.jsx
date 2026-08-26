@@ -71,6 +71,30 @@ export default function InventoryPageContent() {
   const inventoryResponse = queryMockInventoryList(queryState);
   const pageInfo = mapInventoryResponseToPageInfo(inventoryResponse);
 
+  // 이전/다음 버튼은 disabled 상태에서 호출되지 않지만, page 값 자체도
+  // 1과 totalPages 밖으로 나가지 않도록 한 번 더 방어한다. 필터·검색은
+  // 그대로 두고 page만 새 값으로 교체한다(기존 객체 mutate 없음).
+  function handlePreviousPage() {
+    setQueryState((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }));
+  }
+
+  function handleNextPage() {
+    setQueryState((prev) => ({
+      ...prev,
+      page: Math.min(pageInfo.totalPages, prev.page + 1),
+    }));
+  }
+
+  // 긴급 보충 "외 N개 더보기": queryState는 건드리지 않고(필터·재고 상태
+  // 조건 변경 없음), URL hash도 바꾸지 않고 기존 TableCard id로 스크롤만
+  // 한다. 요소가 아직 없을 극단적인 경우를 대비해 optional chaining으로
+  // 감싼다.
+  function handleScrollToInventoryTable() {
+    document
+      .getElementById('inventory-table')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <section className={dashboardLayoutStyles.page}>
       <PageHeader
@@ -127,9 +151,17 @@ export default function InventoryPageContent() {
                 <>
                   {`${URGENT_RESTOCK_BREAD.total}개`}
                   {URGENT_RESTOCK_BREAD.remainingCount > 0 ? (
-                    <span className={styles.restockMore}>
-                      {` · 외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
-                    </span>
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        className={styles.restockMore}
+                        onClick={handleScrollToInventoryTable}
+                        aria-label={`남은 긴급 재고 ${URGENT_RESTOCK_BREAD.remainingCount}개를 재고 목록에서 보기`}
+                      >
+                        {`외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
+                      </button>
+                    </>
                   ) : null}
                 </>
               }
@@ -166,101 +198,137 @@ export default function InventoryPageContent() {
                 선택한 조건에 해당하는 상품이 없습니다.
               </p>
             ) : (
-              <div
-                className={styles.tableWrapper}
-                tabIndex={0}
-                aria-label="재고 목록 표, 좌우로 스크롤 가능"
-              >
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th scope="col">상품</th>
-                      <th scope="col">구분</th>
-                      <th scope="col">초기/생산</th>
-                      <th scope="col">판매</th>
-                      <th scope="col">현재</th>
-                      <th scope="col">재고율</th>
-                      <th scope="col">상태</th>
-                      <th scope="col">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageInfo.items.map((item) => {
-                      const meterWidth = Math.min(
-                        100,
-                        Math.max(0, item.remaining_pct)
-                      );
+              <>
+                <div
+                  className={styles.tableWrapper}
+                  tabIndex={0}
+                  aria-label="재고 목록 표, 좌우로 스크롤 가능"
+                >
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">상품</th>
+                        <th scope="col">구분</th>
+                        <th scope="col">초기/생산</th>
+                        <th scope="col">판매</th>
+                        <th scope="col">현재</th>
+                        <th scope="col">재고율</th>
+                        <th scope="col">상태</th>
+                        <th scope="col">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageInfo.items.map((item) => {
+                        const meterWidth = Math.min(
+                          100,
+                          Math.max(0, item.remaining_pct)
+                        );
 
-                      return (
-                        <tr
-                          key={item.product_id}
-                          data-status={item.stock_status.toLowerCase()}
-                        >
-                          <td className={styles.productCell}>
-                            <div
-                              className={styles.productName}
-                              title={item.product_name}
-                            >
-                              {item.product_name}
-                            </div>
-                            <div className={styles.productCategory}>
-                              {item.category ?? '미분류'}
-                            </div>
-                          </td>
-                          <td className={styles.nowrapCell}>
-                            {PRODUCT_TYPE_LABEL[item.product_type]}
-                          </td>
-                          <td className={styles.nowrapCell}>
-                            {`${item.produced_qty}개`}
-                          </td>
-                          <td className={styles.nowrapCell}>
-                            {`${item.sold_qty}개`}
-                          </td>
-                          <td className={styles.nowrapCell}>
-                            <span className={styles.remainingQty}>
-                              {`추정 ${item.remaining_qty}개`}
-                            </span>
-                          </td>
-                          <td>
-                            <div className={styles.stockRate}>
+                        return (
+                          <tr
+                            key={item.product_id}
+                            data-status={item.stock_status.toLowerCase()}
+                          >
+                            <td className={styles.productCell}>
                               <div
-                                className={styles.stockMeter}
-                                aria-hidden="true"
+                                className={styles.productName}
+                                title={item.product_name}
                               >
-                                <span
-                                  className={styles.stockMeterFill}
-                                  style={{ width: `${meterWidth}%` }}
-                                />
+                                {item.product_name}
                               </div>
-                              <span className={styles.stockRateText}>
-                                {`${Math.round(item.remaining_pct)}%`}
+                              <div className={styles.productCategory}>
+                                {item.category ?? '미분류'}
+                              </div>
+                            </td>
+                            <td className={styles.nowrapCell}>
+                              {PRODUCT_TYPE_LABEL[item.product_type]}
+                            </td>
+                            <td className={styles.nowrapCell}>
+                              {`${item.produced_qty}개`}
+                            </td>
+                            <td className={styles.nowrapCell}>
+                              {`${item.sold_qty}개`}
+                            </td>
+                            <td className={styles.nowrapCell}>
+                              <span className={styles.remainingQty}>
+                                {`추정 ${item.remaining_qty}개`}
                               </span>
-                            </div>
-                          </td>
-                          <td>
-                            <StatusBadge
-                              status={item.stock_status.toLowerCase()}
-                            >
-                              {STOCK_STATUS_LABEL[item.stock_status]}
-                            </StatusBadge>
-                          </td>
-                          <td>
-                            <Button
-                              type="button"
-                              variant="primary"
-                              disabled
-                              title="재고 조정 기능 준비 중"
-                              aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
-                            >
-                              재고 조정
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            </td>
+                            <td>
+                              <div className={styles.stockRate}>
+                                <div
+                                  className={styles.stockMeter}
+                                  aria-hidden="true"
+                                >
+                                  <span
+                                    className={styles.stockMeterFill}
+                                    style={{ width: `${meterWidth}%` }}
+                                  />
+                                </div>
+                                <span className={styles.stockRateText}>
+                                  {`${Math.round(item.remaining_pct)}%`}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <StatusBadge
+                                status={item.stock_status.toLowerCase()}
+                              >
+                                {STOCK_STATUS_LABEL[item.stock_status]}
+                              </StatusBadge>
+                            </td>
+                            <td>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                disabled
+                                title="재고 조정 기능 준비 중"
+                                aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                              >
+                                재고 조정
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <nav
+                  className={styles.paginationFooter}
+                  aria-label="재고 목록 페이지네이션"
+                >
+                  <span className={styles.paginationCount}>
+                    {`총 ${pageInfo.total}개 중 ${pageInfo.rangeStart}-${pageInfo.rangeEnd}`}
+                  </span>
+                  <div className={styles.paginationNav}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!pageInfo.hasPreviousPage}
+                      onClick={handlePreviousPage}
+                      aria-label="이전 재고 목록 페이지"
+                    >
+                      이전
+                    </Button>
+                    <span
+                      className={styles.paginationPageText}
+                      aria-live="polite"
+                    >
+                      {`${pageInfo.currentPage} / ${pageInfo.totalPages}페이지`}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!pageInfo.hasNextPage}
+                      onClick={handleNextPage}
+                      aria-label="다음 재고 목록 페이지"
+                    >
+                      다음
+                    </Button>
+                  </div>
+                </nav>
+              </>
             )}
           </TableCard>
         </div>

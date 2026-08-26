@@ -88,11 +88,25 @@
 /* "지금 채워야 할 빵" 긴급 보충 영역(F1-5). NoticeCard 자체는 공통
    컴포넌트를 그대로 쓰고, 여기서는 그 안의 상품 Chip 목록 배치만 담당한다. */
 
-/* "외 N개 더보기"는 비상호작용 안내 텍스트다(F1-6에서 테이블이 생기면 실제
-   이동 동작으로 바뀔 예정) — button/link가 아니므로 밑줄 등 클릭 가능해
-   보이는 장식을 주지 않는다. */
+/* "외 N개 더보기"는 재고 표(#inventory-table)로 스크롤하는 텍스트형 보조
+   액션 button이다(F1-6B). 일반 CTA가 아니라 목업의 밑줄 텍스트 링크
+   형태라 공통 Button 대신 페이지 전용 button에서 브라우저 기본 스타일만
+   지운다. */
 .restockMore {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--dashboard-color-notice-text);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.restockMore:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
 }
 
 .restockChips {
@@ -281,4 +295,36 @@
   color: var(--dashboard-color-text-muted);
   font-size: 12px;
   text-align: center;
+}
+
+/* 페이지네이션 footer(F1-6B). tableWrapper와 형제 요소로, table/tbody
+   안에는 넣지 않는다. 결과 범위(왼쪽)와 이동 영역(오른쪽)을 큰 화면에서는
+   한 행에, 좁은 화면에서는 wrap해 배치한다. */
+.paginationFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--dashboard-color-card-divider);
+}
+
+.paginationCount {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.paginationNav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paginationPageText {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
