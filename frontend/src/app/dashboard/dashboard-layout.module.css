@@ -289,32 +289,6 @@
   background: currentColor;
 }
 
-.topbarButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--dashboard-color-border);
-  border-radius: 8px;
-  background: var(--dashboard-color-surface);
-  font-size: 11px;
-  font-weight: 700;
-  color: inherit;
-}
-
-.topbarButtonIcon {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-}
-
-.topbarButton:disabled {
-  color: var(--dashboard-color-text-muted);
-  cursor: not-allowed;
-}
-
 .contentViewport {
   flex: 1;
   min-width: 0;

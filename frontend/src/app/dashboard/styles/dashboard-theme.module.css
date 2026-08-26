@@ -26,4 +26,10 @@
   --dashboard-color-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
   --dashboard-color-sidebar-active-bg: rgba(255, 255, 255, 0.18);
   --dashboard-color-sidebar-control-bg: rgba(255, 255, 255, 0.06);
+
+  /* Action (Button primary) — #0a6c56은 임의로 만든 색상이 아니라
+     HTML 목업(dashboard_mock.html)의 최종 Topbar Primary CTA
+     (.top-btn.primary) 값이다. */
+  --dashboard-color-brand-primary: #0a6c56;
+  --dashboard-color-on-brand: #ffffff;
 }
