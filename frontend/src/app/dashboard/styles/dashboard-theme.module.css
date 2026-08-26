@@ -66,4 +66,12 @@
   --dashboard-color-segmented-selected-border: #bfe4d4;
   --dashboard-color-segmented-selected-hover-background: #daf0e6;
   --dashboard-color-segmented-selected-hover-border: #a9dcc4;
+
+  /* Stock rate meter — HTML 목업 .stock-meter(track 배경)과, 그 아래
+     "2026-08-25 재고 관리: 재고율 미터를 오렌지 계열로 분리" 주석과 함께
+     .stock-meter i를 !important로 덮어쓰는 최종 fill 값을 그대로 옮긴
+     토큰이다. 상태(OK/LOW/OUT)에 따라 색이 바뀌지 않고 항상 이 오렌지
+     하나만 쓴다 — 관리 버튼·필터의 그린과 색 역할을 구분하기 위함이다. */
+  --dashboard-color-stock-meter-track: #eee5db;
+  --dashboard-color-stock-meter-fill: #ff6b19;
 }
