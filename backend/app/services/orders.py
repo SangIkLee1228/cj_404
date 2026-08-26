@@ -184,7 +184,7 @@ def load_items(order_id: int) -> list[dict]:
 def load_grade_rates(applied_grade_id: int | None) -> tuple[Decimal, Decimal]:
     '''(할인율, 적립률). 회원 미연결이면 (0,0)'''
     if applied_grade_id is None:
-        return Decimal("0"), Decimal("o")
+        return Decimal("0"), Decimal("0")
 
     rows = (
         get_supabase()
@@ -218,7 +218,8 @@ _ORDER_SELECT = "*, member(member_id, name, membership_grade(grade_code, grade_n
 def load_order(order_id: int, staff: StaffContext) -> dict:
     '''
     주문 1 건을 읽고 접근 권한을 확인한다. 없으면 404, 다른 매장 주문이면 403.
-    모든 주문 API 가 가장 먼저 부르는 함수다 - 여기를 통과한 order 는 '존재하고, 이 직원이 손대도 되는 주문' 이 보장된다.
+    모든 주문 API 가 가장 먼저 부르는 함수다.
+    여기를 통과한 order 는 '존재하고, 이 직원이 손대도 되는 주문' 이 보장된다.
     '''
     rows = (
         get_supabase()
@@ -446,3 +447,31 @@ def replace_item_product(order_id: int, item: dict, new_product_id: int, quantit
     delete_item(item["order_item_id"])
     add_quantity(order_id, new_product_id, quantity,
                  unit_price, "STAFF_CORRECTED")
+
+
+def save_manual_discount(order: dict, amounts: Amounts, reason: str | None, staff_id: int) -> dict:
+    '''
+    수동 할인과 금액 6종을 한 번의 UPDATE로 저장한다 (FR-08).
+
+    금액을 나눠 쓰면 안 된다. orders 행의 CHECK 제약이
+    discount_amount = membership + manual, total = gross - discount 를 검사하므로
+    manual만 먼저 쓰는 순간 항등식이 깨져 저장이 거부된다.
+    '''
+    columns: dict = {
+        **amounts.as_order_columns(),
+        "manual_discount_reason": reason if amounts.manual_discount_amount > 0 else None,
+        "manual_discount_staff_id": staff_id if amounts.manual_discount_amount > 0 else None,
+    }
+    get_supabase().table("orders").update(columns).eq(
+        "order_id", order["order_id"]).execute()
+    return {**order, **columns}
+
+
+def cancel_order(order: dict) -> dict:
+    ''' 
+    계산 취소 (FR-09). PENDING 에서만 호출된다 - 재고는 차감된 적이 없다.
+    '''
+    columns = {"status": "CANCELLED"}
+    get_supabase().table("orders").update(columns).eq(
+        "order_id", order["order_id"]).execute()
+    return {**order, **columns}

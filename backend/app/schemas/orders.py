@@ -111,3 +111,14 @@ class OrderItemUpdate(BaseModel):
     ''' PATCH /orers/{id}/items/{items_id} 요청. 수량 변경 또는 상품 재선택 '''
     quantity: int | None = Field(default=None, ge=1, le=99)
     product_id: int | None = None
+
+
+class ManualDiscountRequest(BaseModel):
+    '''
+    POST /orders/{id}/discount 요청 (FR-08, 직원 수동 할인 전용).
+
+    여러 번 보내면 덮어쓴다. amount=0이면 할인 해제.
+    '''
+
+    amount: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=100)

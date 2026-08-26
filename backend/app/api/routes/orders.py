@@ -3,12 +3,20 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
-from app.schemas.orders import OrderDetail, OrderItemCreate, OrderItemUpdate
+from app.schemas.orders import (
+    ManualDiscountRequest,
+    OrderDetail,
+    OrderItemCreate,
+    OrderItemUpdate,
+)
 from app.services.orders import (
     add_quantity,
+    cancel_order,
+    compute_amounts,
     delete_item,
     ensure_pending,
     load_current_order,
+    load_grade_rates,
     load_item,
     load_items,
     load_order,
@@ -16,6 +24,7 @@ from app.services.orders import (
     order_detail,
     recalculate,
     replace_item_product,
+    save_manual_discount,
     set_item_quantity,
 )
 
@@ -138,3 +147,47 @@ def remove_order_item(
 
     order, items = recalculate(order)
     return order_detail(order, items)
+
+
+@router.post("/{order_id}/discount", response_model=OrderDetail)
+def apply_manual_discount(
+        order_id: int,
+        payload: ManualDiscountRequest,
+        staff: StaffContext = Depends(get_staff_context),):
+    '''
+    직원 수동 할인 (FR-08). 덮어쓰기 방식이며 amount = 0 이면 해제. 
+    '''
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+
+    items = load_items(order_id)
+    discount_rate, point_earn_rate = load_grade_rates(
+        order.get("applied_grade_id"))
+    amounts = compute_amounts(items, discount_rate=discount_rate,
+                              point_earn_rate=point_earn_rate, manual_discount_amount=payload.amount,)
+
+    # compute_amounts 는 gross 를 넘는 할인을 잘라낸다. 잘렸다는 건 초과했다는 뜻이다.
+    if amounts.manual_discount_amount != payload.amount:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"할인 금액이 주문 금액을 초과합니다. (최대 {amounts.manual_discount_amount} 원)", )
+
+    order = save_manual_discount(
+        order, amounts, payload.reason, staff.staff_id)
+    logger.info("order.discount_applied", order_id=order_id,
+                staff_id=staff.staff_id,
+                amount=payload.amount,
+                )
+    return order_detail(order, items)
+
+
+@router.post("/{order_id}/cancel", response_model=OrderDetail)
+def cancel_current_order(order_id: int, staff: StaffContext = Depends(get_staff_context), ):
+    '''
+    계산 취소 (FR-09). PENDING 에서만 가능하고 PAID 면 409.
+    '''
+    order = load_order(order_id, staff)
+    ensure_pending(order)
+
+    order = cancel_order(order)
+    logger.info("order.cancelled", order_id=order_id, staff_id=staff.staff_id)
+    return order_detail(order, load_items(order_id))
