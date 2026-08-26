@@ -125,6 +125,6 @@ class ManualDiscountRequest(BaseModel):
 
 
 class MemberLinkRequest(BaseModel):
-    """POST /orders/{id}/member 요청 (FR-18)."""
+    """POST /orders/{id}/member 요청 (FR-18). 하이픈은 있어도 없어도 된다."""
 
-    phone: str = Field(pattern=r"^01\d{8,9}$", description="하이픈 없는 휴대폰번호")
+    phone: str = Field(min_length=10, max_length=13)

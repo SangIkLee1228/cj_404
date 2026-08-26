@@ -14,6 +14,7 @@ from dataclasses import dataclass  # 금액 묶음을 담을 Amounts 클래스�
 from decimal import ROUND_FLOOR, Decimal  # 명세서 1.5가 floor를 명시 → 반올림 아님
 
 import structlog  # 기존 코드가 쓰는 로거. print/logging 대신 통일
+import re
 from fastapi import HTTPException, status
 
 from app.core.deps import StaffContext
@@ -483,16 +484,29 @@ _MEMBER_SELECT = (
 )
 
 
-def load_member_by_phone(phone: str) -> dict:
-    """휴대폰번호로 회원 조회 (FR-18). 미등록이면 404.
+def _phone_variants(phone: str) -> list[str]:
+    """'010-5506-5012'와 '01055065012'를 모두 만들어 준다.
 
-    명세서 4.5: FE는 이 404를 "비회원"이 아니라 "번호를 다시 확인해 주세요"로 표시한다.
+    명세서 4.6은 하이픈 없는 형식을 쓰는데 DB 시드는 하이픈을 포함해 저장돼 있다.
+    어느 쪽으로 들어와도 찾히도록 두 표기를 모두 조회한다.
+    (근본 해결은 DB를 숫자만으로 통일하는 것 - 팀 협의 필요)
     """
+    digits = re.sub(r"\D", "", phone)
+    variants = {digits}
+    if len(digits) == 11:
+        variants.add(f"{digits[:3]}-{digits[3:7]}-{digits[7:]}")
+    elif len(digits) == 10:
+        variants.add(f"{digits[:3]}-{digits[3:6]}-{digits[6:]}")
+    return list(variants)
+
+
+def load_member_by_phone(phone: str) -> dict:
+    """휴대폰번호로 회원 조회 (FR-18). 미등록이면 404."""
     rows = (
         get_supabase()
         .table("member")
         .select(_MEMBER_SELECT)
-        .eq("phone", phone)
+        .in_("phone", _phone_variants(phone))
         .eq("is_active", True)
         .limit(1)
         .execute()
