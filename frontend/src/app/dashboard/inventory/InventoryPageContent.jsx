@@ -4,21 +4,43 @@ import { useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SelectControl from '../components/ui/SelectControl';
+import NoticeCard from '../components/ui/NoticeCard';
+import StatusBadge from '../components/ui/StatusBadge';
+import Button from '../components/ui/Button';
 import dashboardLayoutStyles from '../dashboard-layout.module.css';
 import styles from './inventory.module.css';
-import { DEFAULT_INVENTORY_QUERY } from './inventory-data';
+import {
+  DEFAULT_INVENTORY_QUERY,
+  getUrgentRestockBread,
+} from './inventory-data';
 import {
   PRODUCT_TYPE_FILTER_OPTIONS,
   STOCK_STATUS_FILTER_OPTIONS,
   CATEGORY_FILTER_OPTIONS,
+  INVENTORY_MOCK_RESPONSE,
 } from './inventory-mock-data';
 
 // F1-4는 조회 상태(queryState)만 관리한다. queryMockInventoryList /
 // mapInventoryResponseToPageInfo 호출과 그 결과를 실제로 화면에 그리는 일은
-// F1-5(긴급 보충)·F1-6(재고 표·페이지네이션)의 몫이다 — 여기서 호출해봐야
-// 아직 아무 데도 쓰이지 않는 값을 만들 뿐이라, queryState를 그 함수들에 바로
-// 넘길 수 있는 형태로 정확히 준비해 두는 것까지만 이번 단계의 책임으로
-// 둔다.
+// F1-6(재고 표·페이지네이션)의 몫이다 — 여기서 호출해봐야 아직 아무 데도
+// 쓰이지 않는 값을 만들 뿐이라, queryState를 그 함수들에 바로 넘길 수 있는
+// 형태로 정확히 준비해 두는 것까지만 이 단계의 책임으로 둔다.
+
+// "지금 채워야 할 빵" 긴급 보충 영역은 상단 필터와 무관하게 매장 전체
+// 기준으로 항상 같은 대상을 보여줘야 한다(inventory-data.js의 데이터 계약
+// 참고: 페이지네이션된 response.items가 아니라 전체 Mock 데이터를 넘겨야
+// 함). 필터 상태(queryState)에 의존하지 않는 정적인 값이라 컴포넌트 state로
+// 두지 않고, import 시점에 한 번만 계산되는 모듈 상수로 둔다.
+const URGENT_RESTOCK_BREAD = getUrgentRestockBread(
+  INVENTORY_MOCK_RESPONSE.items
+);
+
+// getUrgentRestockBread가 돌려주는 stock_status(LOW/OUT)의 한글 표시 라벨.
+// 화면 문구 자체는 "추정 N개"로 통일하고, 이 라벨은 StatusBadge의
+// aria-label에 상태 의미를 보태는 용도로만 쓴다 — 상태 자체를 여기서 새로
+// 판정하지 않는다.
+const URGENT_STATUS_LABEL = { LOW: '재고 부족', OUT: '매진' };
+
 export default function InventoryPageContent() {
   const [queryState, setQueryState] = useState(DEFAULT_INVENTORY_QUERY);
 
@@ -88,6 +110,48 @@ export default function InventoryPageContent() {
           </div>
         }
       />
+      <div className={dashboardLayoutStyles.pageContent}>
+        {URGENT_RESTOCK_BREAD.total > 0 ? (
+          <NoticeCard
+            title="지금 채워야 할 빵"
+            meta={
+              <>
+                {`${URGENT_RESTOCK_BREAD.total}개`}
+                {URGENT_RESTOCK_BREAD.remainingCount > 0 ? (
+                  <span className={styles.restockMore}>
+                    {` · 외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
+                  </span>
+                ) : null}
+              </>
+            }
+          >
+            <ul className={styles.restockChips}>
+              {URGENT_RESTOCK_BREAD.items.map((item) => (
+                <li key={item.product_id} className={styles.restockChip}>
+                  <span className={styles.restockChipName}>
+                    {item.product_name}
+                  </span>
+                  <StatusBadge
+                    status={item.stock_status.toLowerCase()}
+                    aria-label={`${URGENT_STATUS_LABEL[item.stock_status]}, 추정 재고 ${item.remaining_qty}개`}
+                  >
+                    {`추정 ${item.remaining_qty}개`}
+                  </StatusBadge>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled
+                    title="재고 조정 기능 준비 중"
+                    aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                  >
+                    재고 조정
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </NoticeCard>
+        ) : null}
+      </div>
     </section>
   );
 }
