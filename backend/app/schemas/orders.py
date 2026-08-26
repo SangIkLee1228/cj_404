@@ -1,7 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.codes import MembershipGradeCode, OrderItemSourceType, OrderStatus, PaymentMethod, PointTxnType
 
@@ -48,6 +47,7 @@ class OrderItem(BaseModel):
     unit_price: Decimal
     subtotal: Decimal
     source_type: OrderItemSourceType
+    needs_review: bool = False
 
 
 class PointTransaction(BaseModel):
@@ -114,14 +114,18 @@ class OrderItemUpdate(BaseModel):
 
 
 class ManualDiscountRequest(BaseModel):
-    '''
-    POST /orders/{id}/discount 요청 (FR-08, 직원 수동 할인 전용).
-
-    여러 번 보내면 덮어쓴다. amount=0이면 할인 해제.
-    '''
+    """POST /orders/{id}/discount 요청 (FR-08). 덮어쓰기, amount=0이면 해제."""
 
     amount: int = Field(ge=0)
     reason: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def _reason_required_when_discounting(self):
+        # DB 제약 ck_orders_manual_discount_audit — 할인이 있으면 사유가 필수다.
+        # 여기서 막지 않으면 DB가 거부해 500이 나간다. 422로 정직하게 알린다.
+        if self.amount > 0 and not (self.reason or "").strip():
+            raise ValueError("할인 금액이 있으면 사유를 입력해야 합니다")
+        return self
 
 
 class MemberLinkRequest(BaseModel):

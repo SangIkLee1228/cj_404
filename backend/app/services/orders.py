@@ -145,7 +145,7 @@ def compute_amounts(
 
 _ITEM_SELECT = (
     "order_item_id, product_id, quantity, unit_price, subtotal, source_type,"
-    " product(product_name)"
+    " needs_review, product(product_name)"
 )
 
 
@@ -315,7 +315,8 @@ def order_detail(order: dict, items: list[dict]) -> OrderDetail:
                 subtotal=money(row["subtotal"]),
                 source_type=row["source_type"],
                 # TODO: recognize 구현 시 detected_item과 연결 (결정 C)
-                needs_review=False,
+                # 하드코딩 False 제거
+                needs_review=bool(row.get("needs_review", False)),
             )
             for row in items
         ],

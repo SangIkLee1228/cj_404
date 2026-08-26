@@ -83,7 +83,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         # pydantic 검증 실패를 명세서의 details 모양으로 옮긴다.
         details = [
             {
-                "field": ".".join(str(p) for p in err.get("loc", []) if p != "body"),
+                "field": ".".join(str(p) for p in err.get("loc", []) if p != "body") or "body",
                 "reason": err.get("type", "invalid"),
             }
             for err in exc.errors()
@@ -91,17 +91,21 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=_body(
-                "VALIDATION_ERROR", "입력값을 다시 확인해 주세요.", _trace_id(request), details
+                "VALIDATION_ERROR", "입력값을 다시 확인해 주세요.", _trace_id(
+                    request), details
             ),
         )
 
     @app.exception_handler(HTTPException)
     async def _http_error(request: Request, exc: HTTPException):
-        code = getattr(exc, "code", None) or DEFAULT_CODE.get(exc.status_code, "INVALID_REQUEST")
-        message = exc.detail if isinstance(exc.detail, str) else "요청을 처리할 수 없습니다."
+        code = getattr(exc, "code", None) or DEFAULT_CODE.get(
+            exc.status_code, "INVALID_REQUEST")
+        message = exc.detail if isinstance(
+            exc.detail, str) else "요청을 처리할 수 없습니다."
         return JSONResponse(
             status_code=exc.status_code,
-            content=_body(code, message, _trace_id(request), getattr(exc, "details", None)),
+            content=_body(code, message, _trace_id(request),
+                          getattr(exc, "details", None)),
             headers=getattr(exc, "headers", None),
         )
 
