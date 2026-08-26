@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SelectControl from '../components/ui/SelectControl';
@@ -8,6 +8,7 @@ import NoticeCard from '../components/ui/NoticeCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import Button from '../components/ui/Button';
 import TableCard from '../components/ui/TableCard';
+import InventoryAdjustmentModal from './InventoryAdjustmentModal';
 import dashboardLayoutStyles from '../dashboard-layout.module.css';
 import styles from './inventory.module.css';
 import {
@@ -45,6 +46,26 @@ const PRODUCT_TYPE_LABEL = { BREAD: '빵', DRINK: '음료' };
 
 export default function InventoryPageContent() {
   const [queryState, setQueryState] = useState(DEFAULT_INVENTORY_QUERY);
+  // 재고 조정 모달이 다루는 상품 한 건. null이면 모달이 닫힌 상태다 —
+  // 별도 open boolean을 두지 않고 이 값 하나로 열림/닫힘을 표현한다.
+  // 긴급 보충 Chip과 재고 표 관리 열이 같은 상태와 같은 모달 인스턴스를
+  // 공유한다.
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
+  // 모달을 연 실제 button element를 기억해둔다. Dialog.Trigger를 쓰지
+  // 않는 controlled 모달이라 Radix가 스스로 알 수 없는, "닫힌 뒤 포커스를
+  // 되돌릴 곳"을 InventoryAdjustmentModal에 명시적으로 넘기기 위함이다.
+  const adjustmentTriggerRef = useRef(null);
+
+  function handleOpenAdjustmentModal(item, event) {
+    adjustmentTriggerRef.current = event.currentTarget;
+    setSelectedInventoryItem(item);
+  }
+
+  function handleAdjustmentModalOpenChange(nextOpen) {
+    if (!nextOpen) {
+      setSelectedInventoryItem(null);
+    }
+  }
 
   // 네 필터 모두 규칙이 같다: 값 하나 바꾸고 page를 1로 되돌린다. 상태
   // 객체는 항상 새로 만들어서 교체하고 직접 mutate하지 않는다.
@@ -181,9 +202,10 @@ export default function InventoryPageContent() {
                     <Button
                       type="button"
                       variant="primary"
-                      disabled
-                      title="재고 조정 기능 준비 중"
-                      aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                      onClick={(event) =>
+                        handleOpenAdjustmentModal(item, event)
+                      }
+                      aria-label={`${item.product_name} 재고 조정 열기`}
                     >
                       재고 조정
                     </Button>
@@ -281,9 +303,10 @@ export default function InventoryPageContent() {
                               <Button
                                 type="button"
                                 variant="primary"
-                                disabled
-                                title="재고 조정 기능 준비 중"
-                                aria-label={`${item.product_name} 재고 조정 기능 준비 중`}
+                                onClick={(event) =>
+                                  handleOpenAdjustmentModal(item, event)
+                                }
+                                aria-label={`${item.product_name} 재고 조정 열기`}
                               >
                                 재고 조정
                               </Button>
@@ -333,6 +356,12 @@ export default function InventoryPageContent() {
           </TableCard>
         </div>
       </div>
+      <InventoryAdjustmentModal
+        item={selectedInventoryItem}
+        open={selectedInventoryItem !== null}
+        onOpenChange={handleAdjustmentModalOpenChange}
+        returnFocusRef={adjustmentTriggerRef}
+      />
     </section>
   );
 }
