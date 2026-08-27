@@ -140,9 +140,16 @@ export default function AlertsPageContent() {
     markOneMutation.mutate(notificationId, {
       onSuccess: () => {
         if (shouldStepBackPage) {
+          // 목록(list) 쪽만 잘못된 offset을 그대로 재호출하지 않도록
+          // stale로만 표시한다. unread-count(sidebar 배지)는 이 offset
+          // 문제와 무관하므로 별도로 실제 재조회한다 — alertsQueryKeys.all
+          // 전체를 refetchType:'none'으로 묶으면 배지도 함께 멈춘다.
           queryClient.invalidateQueries({
-            queryKey: alertsQueryKeys.all,
+            queryKey: alertsQueryKeys.lists(),
             refetchType: 'none',
+          });
+          queryClient.invalidateQueries({
+            queryKey: alertsQueryKeys.unreadCount(),
           });
           setQueryState((prev) => ({
             ...prev,
@@ -175,9 +182,15 @@ export default function AlertsPageContent() {
     markAllMutation.mutate(undefined, {
       onSuccess: () => {
         if (isUnreadFilterBeyondFirstPage) {
+          // 개별 읽음의 동일 분기와 같은 이유로 list만 stale 처리하고,
+          // unread-count는 별도로 실제 재조회해 사이드바 배지가 즉시
+          // 갱신되게 한다.
           queryClient.invalidateQueries({
-            queryKey: alertsQueryKeys.all,
+            queryKey: alertsQueryKeys.lists(),
             refetchType: 'none',
+          });
+          queryClient.invalidateQueries({
+            queryKey: alertsQueryKeys.unreadCount(),
           });
           setQueryState((prev) => ({ ...prev, page: 1 }));
         } else {

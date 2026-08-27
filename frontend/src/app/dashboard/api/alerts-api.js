@@ -14,6 +14,7 @@ export const alertsQueryKeys = {
   all: ['dashboard', 'alerts'],
   lists: () => ['dashboard', 'alerts', 'list'],
   list: (normalizedQuery) => ['dashboard', 'alerts', 'list', normalizedQuery],
+  unreadCount: () => ['dashboard', 'alerts', 'unread-count'],
 };
 
 // backend/app/api/routes/notifications.py::NotificationListItem 계약.
@@ -60,6 +61,12 @@ const notificationListResponseSchema = z.object({
 // backend ReadAllResponse 계약.
 const readAllResponseSchema = z.object({
   updated_count: z.number().int().nonnegative(),
+});
+
+// backend UnreadCountResponse 계약(GET /api/notifications/unread-count).
+// required 필드는 unread_count 하나뿐이다.
+const unreadCountResponseSchema = z.object({
+  unread_count: z.number().int().nonnegative(),
 });
 
 /**
@@ -165,6 +172,35 @@ export async function markAllNotificationsRead({ signal } = {}) {
     }
     throw new DashboardApiError(
       '전체 읽음 처리 응답 형식이 API 계약과 일치하지 않습니다.',
+      { status: null }
+    );
+  }
+
+  return result.data;
+}
+
+/**
+ * GET /api/notifications/unread-count. 사이드바 배지가 쓰는 전용 조회다 —
+ * 목록 전체를 받아 프론트에서 집계하지 않고 이 값을 그대로 쓴다.
+ */
+export async function fetchUnreadNotificationCount({ signal } = {}) {
+  const raw = await requestDashboardJson('/notifications/unread-count', {
+    signal,
+  });
+
+  const result = unreadCountResponseSchema.safeParse(raw);
+  if (!result.success) {
+    if (typeof console !== 'undefined') {
+      console.error(
+        '[alerts-api] 읽지 않은 알림 개수 응답이 계약과 일치하지 않습니다:',
+        result.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        }))
+      );
+    }
+    throw new DashboardApiError(
+      '읽지 않은 알림 개수 응답 형식이 API 계약과 일치하지 않습니다.',
       { status: null }
     );
   }

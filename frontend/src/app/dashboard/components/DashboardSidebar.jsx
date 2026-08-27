@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Package,
@@ -13,6 +14,10 @@ import {
 } from 'lucide-react';
 import styles from '../dashboard-layout.module.css';
 import { DASHBOARD_ROUTES, isRouteActive } from '../dashboard-routes';
+import {
+  alertsQueryKeys,
+  fetchUnreadNotificationCount,
+} from '../api/alerts-api';
 
 // Lucide는 outline(stroke) 아이콘만 제공한다. 각 아이콘의 stroke 구조상
 // 자연스러운 filled 형태가 없어, 의미가 유지되는 선에서 직접 그린 단순한
@@ -116,6 +121,22 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const alertsActive = isRouteActive(pathname, DASHBOARD_ROUTES.alerts.href);
 
+  // 사이드바 배지 전용 조회 — 목록을 받아 프론트에서 집계하지 않고
+  // GET /api/notifications/unread-count 값을 그대로 쓴다. Foundation
+  // 기본 retry/refetchOnWindowFocus 정책을 그대로 쓴다(별도 옵션 지정
+  // 없음).
+  const unreadCountQuery = useQuery({
+    queryKey: alertsQueryKeys.unreadCount(),
+    queryFn: ({ signal }) => fetchUnreadNotificationCount({ signal }),
+  });
+  const unreadCount = unreadCountQuery.isSuccess
+    ? unreadCountQuery.data.unread_count
+    : 0;
+  // 로딩 중이거나 오류가 나면 배지만 숨긴다 — 사이드바·링크·라우팅은
+  // 그대로 유지하고 별도의 로딩/오류 문구를 추가하지 않는다.
+  const showUnreadBadge = unreadCountQuery.isSuccess && unreadCount > 0;
+  const unreadBadgeText = unreadCount > 99 ? '99+' : String(unreadCount);
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.logoArea}>
@@ -167,6 +188,15 @@ export default function DashboardSidebar() {
           >
             <NavIcon Icon={Bell} FilledIcon={AlertIconFilled} />
             <span>{DASHBOARD_ROUTES.alerts.label}</span>
+            {showUnreadBadge ? (
+              <span
+                className={styles.sidebarAlertBadge}
+                aria-live="polite"
+                aria-label={`읽지 않은 알림 ${unreadCount}개`}
+              >
+                {unreadBadgeText}
+              </span>
+            ) : null}
           </Link>
         </div>
         <div className={styles.storeInfo}>
