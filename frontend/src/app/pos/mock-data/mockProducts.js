@@ -8,14 +8,14 @@ const rawBreadCatalog = [
   { name: '우유 식빵', price: 4500, category: '식빵', emoji: '🍞' },
   { name: '통밀 식빵', price: 4700, category: '식빵', emoji: '🍞' },
   { name: '생크림 식빵', price: 5200, category: '식빵', emoji: '🍞' },
-  { name: '밤식빵', price: 4900, category: '식빵', emoji: '🍞' },
+  { name: '밤 식빵', price: 4900, category: '식빵', emoji: '🍞' },
   { name: '고르곤졸라 곡물빵', price: 3800, category: '건강빵', emoji: '🥖' },
   { name: '통밀 롤', price: 2300, category: '건강빵', emoji: '🥖' },
   { name: '호두 깜빠뉴', price: 4200, category: '건강빵', emoji: '🥖' },
   { name: '올리브 치아바타', price: 3600, category: '건강빵', emoji: '🥖' },
   { name: '소금빵', price: 2200, category: '간식빵', emoji: '🥐' },
   { name: '카망베르 치즈빵', price: 3200, category: '간식빵', emoji: '🥐' },
-  { name: '마늘바게트', price: 3300, category: '간식빵', emoji: '🥖' },
+  { name: '마늘 바게트', price: 3300, category: '간식빵', emoji: '🥖' },
   { name: '단팥빵', price: 2100, category: '간식빵', emoji: '🥯' },
   { name: '소보로빵', price: 2500, category: '간식빵', emoji: '🥯' },
   { name: '크림치즈 베이글', price: 3600, category: '간식빵', emoji: '🥯' },
@@ -91,7 +91,7 @@ const rawBreadCatalog = [
     emoji: '🥟',
   },
   {
-    name: '찹쌀도넛',
+    name: '찹쌀 도넛',
     price: 2300,
     category: '도넛/고로케',
     subCategory: '도넛',
@@ -114,13 +114,13 @@ const rawBreadCatalog = [
     emoji: '🍩',
   },
   {
-    name: '김치고로케',
+    name: '김치 고로케',
     price: 3200,
     category: '도넛/고로케',
     subCategory: '고로케',
     emoji: '🥟',
   },
-  { name: '리얼초코소라빵', price: 3200, category: '간식빵', emoji: '🥯' },
+  { name: '리얼초코 소라빵', price: 3200, category: '간식빵', emoji: '🥯' },
   {
     name: '기분좋은 올리브 베이글',
     price: 3600,
@@ -270,8 +270,8 @@ export const AI_TRAINED_PRODUCT_NAMES = [
   '딸기 마카롱 도넛',
   '옛날 꽈배기 도넛',
   '단팥빵',
-  '김치고로케',
-  '리얼초코소라빵',
+  '김치 고로케',
+  '리얼초코 소라빵',
   '기분좋은 올리브 베이글',
 ];
 
@@ -308,7 +308,7 @@ export const MOCK_SOLD_TODAY_BY_NAME = {
   '크림치즈 베이글': 20,
   '버터 크루아상': 18,
   '우유 식빵': 12,
-  마늘바게트: 9,
+  '마늘 바게트': 9,
 };
 
 /**
@@ -335,7 +335,7 @@ function aiCaptureItem(name, qty, confidence, belowThreshold = false) {
 export const MOCK_BASIC_CAPTURE = [
   aiCaptureItem('딸기 마카롱 도넛', 1, 97),
   aiCaptureItem('단팥빵', 2, 95),
-  aiCaptureItem('김치고로케', 1, 93, true),
+  aiCaptureItem('김치 고로케', 1, 93, true),
 ];
 
 /**
@@ -350,7 +350,7 @@ export const MOCK_ADD_CAPTURE = [
 /** 다시 촬영 AI 인식 Mock 결과 — 기존 AI 인식 결과를 이 결과로 교체한다(직접 추가 항목은 유지). */
 export const MOCK_RETAKE_CAPTURE = [
   aiCaptureItem('딸기 마카롱 도넛', 2, 99),
-  aiCaptureItem('리얼초코소라빵', 1, 97),
+  aiCaptureItem('리얼초코 소라빵', 1, 97),
   aiCaptureItem('기분좋은 올리브 베이글', 1, 95),
 ];
 
