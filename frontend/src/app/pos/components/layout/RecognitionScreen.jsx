@@ -71,7 +71,7 @@ export default function RecognitionScreen({
         <ProductCatalog
           productType={state.catalogFilter.productType}
           category={state.catalogFilter.category}
-          managerState={state.managerState}
+          products={pos.products}
           remainingOf={pos.remainingOf}
           onSetType={pos.setCatalogType}
           onSetCategory={pos.setCatalogCategory}
