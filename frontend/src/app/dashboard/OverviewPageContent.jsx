@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import PageHeader from './components/PageHeader';
 import SegmentedControl from './components/ui/SegmentedControl';
 import Card from './components/ui/Card';
+import Button from './components/ui/Button';
 import OverviewSalesChart from './OverviewSalesChart';
 import OverviewTopProductsChart from './OverviewTopProductsChart';
 import OverviewRecentOrders from './OverviewRecentOrders';
@@ -11,17 +13,15 @@ import dashboardLayoutStyles from './dashboard-layout.module.css';
 import styles from './overview.module.css';
 import {
   DEFAULT_OVERVIEW_QUERY,
-  queryMockDashboardOverview,
-  getMockOverviewKpiComparison,
+  OVERVIEW_PERIOD_FILTER_OPTIONS,
   mapDashboardOverviewToKpiCards,
   getOverviewPageTitle,
   getOverviewPeriodLabel,
-  getMockOverviewOrderCountSeries,
   mapDashboardOverviewToSalesChart,
   mapDashboardOverviewToTopProductsChart,
   mapDashboardOverviewToRecentOrders,
 } from './overview-data';
-import { OVERVIEW_PERIOD_FILTER_OPTIONS } from './overview-mock-data';
+import { overviewQueryKeys, fetchDashboardOverview } from './api/overview-api';
 
 // 왼쪽 차트 카드 제목/보조문구. 목업(dashboard_mock.html)의 문구를 그대로
 // 따른다(새 업무 규칙 없음, 단순 매핑).
@@ -95,35 +95,35 @@ export default function OverviewPageContent() {
     setQueryState((prev) => ({ ...prev, period }));
   }
 
-  // 실제 응답과 provisional 비교값을 각각 별도 함수로 조회한 뒤,
-  // mapDashboardOverviewToKpiCards에서만 합쳐 view model을 만든다 — 이
-  // 컴포넌트에서 KPI 합계나 trend를 직접 계산하지 않는다.
-  const overviewResponse = queryMockDashboardOverview(queryState);
-  const kpiComparison = getMockOverviewKpiComparison(queryState.period);
-  const kpiCards = mapDashboardOverviewToKpiCards(
-    overviewResponse,
-    kpiComparison
-  );
+  // Foundation의 DashboardQueryProvider 기본 정책(4xx 재시도 없음,
+  // 그 외 오류 최대 1회 재시도, window focus refetch 비활성화)을 그대로
+  // 재사용한다 — 이 화면에서 별도 retry/refetchOnWindowFocus를 지정하지
+  // 않는다. queryFn의 signal은 React Query가 취소 시 그대로
+  // fetchDashboardOverview → requestDashboardJson → apiFetch까지
+  // 전달된다.
+  const overviewQuery = useQuery({
+    queryKey: overviewQueryKeys.detail(queryState.period),
+    queryFn: ({ signal }) => fetchDashboardOverview(queryState, { signal }),
+  });
+
   const periodLabel = getOverviewPeriodLabel(queryState.period);
+  const overviewResponse = overviewQuery.data;
 
-  // 매출·결제 건수 Mixed Chart와 판매 상위 품목 Doughnut도 같은 패턴이다
-  // — 실제 응답과 provisional 시계열을 각각 조회한 뒤, 결합·파생은
-  // overview-data.js의 매핑 함수에만 맡긴다(label join, 합계, ratio 계산
-  // 전부 이 컴포넌트에서 하지 않음).
-  const orderCountSeries = getMockOverviewOrderCountSeries(queryState.period);
-  const salesChartData = mapDashboardOverviewToSalesChart(
-    overviewResponse,
-    orderCountSeries
-  );
-  const topProductsChartData =
-    mapDashboardOverviewToTopProductsChart(overviewResponse);
-
-  // 최근 판매도 같은 패턴이다 — response.recent_orders를 그대로 최대
-  // 6건까지만 옮기는 매핑은 overview-data.js에 맡기고, 여기서는 그
-  // 결과를 그대로 전달할 뿐 다시 정렬·제한하지 않는다. 별도의 최근 판매
-  // 전용 state는 두지 않는다 — 기간이 바뀌면 위에서 다시 조회한
-  // overviewResponse로부터 매 렌더링마다 새로 계산된다.
-  const recentOrders = mapDashboardOverviewToRecentOrders(overviewResponse);
+  // 성공 상태에서만 view model을 계산한다 — placeholderData/
+  // keepPreviousData/initialData를 쓰지 않으므로, 기간이 바뀌면 새
+  // queryKey가 준비될 때까지 이전 기간의 값이 여기 남아 있지 않는다.
+  const kpiCards = overviewQuery.isSuccess
+    ? mapDashboardOverviewToKpiCards(overviewResponse)
+    : [];
+  const salesChartData = overviewQuery.isSuccess
+    ? mapDashboardOverviewToSalesChart(overviewResponse)
+    : null;
+  const topProductsChartData = overviewQuery.isSuccess
+    ? mapDashboardOverviewToTopProductsChart(overviewResponse)
+    : null;
+  const recentOrders = overviewQuery.isSuccess
+    ? mapDashboardOverviewToRecentOrders(overviewResponse)
+    : [];
 
   return (
     <section className={dashboardLayoutStyles.page}>
@@ -147,61 +147,80 @@ export default function OverviewPageContent() {
         }
       />
       <div className={dashboardLayoutStyles.pageContent}>
-        {/* 페이지 전체가 아니라 KPI Grid에만 제한적으로 aria-live를 둔다
-            — 기간 전환 시 바뀌는 값만 스크린리더에 알린다. */}
-        <div className={styles.kpiGrid} aria-live="polite">
-          {kpiCards.map((card) => (
-            <Card
-              key={card.key}
-              className={[
-                styles.kpiCard,
-                card.key === 'sales' ? styles.salesCard : null,
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <span className={styles.kpiLabel}>{card.label}</span>
-              <span className={styles.kpiValue}>{card.value}</span>
-              <KpiChange trend={card.trend} changePct={card.changePct} />
-            </Card>
-          ))}
-        </div>
-        <div className={styles.chartGrid}>
-          <Card className={styles.chartCard}>
-            <div className={styles.chartHeader}>
-              <h2 className={styles.chartTitle}>
-                {SALES_CHART_TITLE[queryState.period]}
-              </h2>
-              <span className={styles.chartSubtitle}>
-                {SALES_CHART_SUBTITLE[queryState.period]}
-              </span>
-            </div>
-            <div className={styles.chartBody}>
-              <OverviewSalesChart
-                periodLabel={periodLabel}
-                salesChartData={salesChartData}
-              />
-            </div>
+        {overviewQuery.isPending ? (
+          <Card className={styles.stateCard}>
+            <p className={styles.stateMessage} role="status" aria-live="polite">
+              운영 현황을 불러오는 중입니다.
+            </p>
           </Card>
-          <Card className={styles.chartCard}>
-            <div className={styles.chartHeader}>
-              <h2 className={styles.chartTitle}>판매 상위 품목</h2>
-              <span className={styles.chartSubtitle}>
-                {`${periodLabel} · 판매 수량 비중`}
-              </span>
-            </div>
-            <div className={`${styles.chartBody} ${styles.doughnutChartBody}`}>
-              <OverviewTopProductsChart
-                periodLabel={periodLabel}
-                topProductsChartData={topProductsChartData}
-              />
-            </div>
+        ) : overviewQuery.isError ? (
+          <Card className={styles.stateCard}>
+            <p className={styles.stateMessage} role="alert">
+              운영 현황을 불러오지 못했습니다.
+            </p>
+            <Button onClick={() => overviewQuery.refetch()}>다시 시도</Button>
           </Card>
-        </div>
-        <OverviewRecentOrders
-          periodLabel={periodLabel}
-          recentOrders={recentOrders}
-        />
+        ) : (
+          <>
+            {/* 페이지 전체가 아니라 KPI Grid에만 제한적으로 aria-live를
+                둔다 — 기간 전환 시 바뀌는 값만 스크린리더에 알린다. */}
+            <div className={styles.kpiGrid} aria-live="polite">
+              {kpiCards.map((card) => (
+                <Card
+                  key={card.key}
+                  className={[
+                    styles.kpiCard,
+                    card.key === 'sales' ? styles.salesCard : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <span className={styles.kpiLabel}>{card.label}</span>
+                  <span className={styles.kpiValue}>{card.value}</span>
+                  <KpiChange trend={card.trend} changePct={card.changePct} />
+                </Card>
+              ))}
+            </div>
+            <div className={styles.chartGrid}>
+              <Card className={styles.chartCard}>
+                <div className={styles.chartHeader}>
+                  <h2 className={styles.chartTitle}>
+                    {SALES_CHART_TITLE[queryState.period]}
+                  </h2>
+                  <span className={styles.chartSubtitle}>
+                    {SALES_CHART_SUBTITLE[queryState.period]}
+                  </span>
+                </div>
+                <div className={styles.chartBody}>
+                  <OverviewSalesChart
+                    periodLabel={periodLabel}
+                    salesChartData={salesChartData}
+                  />
+                </div>
+              </Card>
+              <Card className={styles.chartCard}>
+                <div className={styles.chartHeader}>
+                  <h2 className={styles.chartTitle}>판매 상위 품목</h2>
+                  <span className={styles.chartSubtitle}>
+                    {`${periodLabel} · 판매 수량 비중`}
+                  </span>
+                </div>
+                <div
+                  className={`${styles.chartBody} ${styles.doughnutChartBody}`}
+                >
+                  <OverviewTopProductsChart
+                    periodLabel={periodLabel}
+                    topProductsChartData={topProductsChartData}
+                  />
+                </div>
+              </Card>
+            </div>
+            <OverviewRecentOrders
+              periodLabel={periodLabel}
+              recentOrders={recentOrders}
+            />
+          </>
+        )}
       </div>
     </section>
   );
