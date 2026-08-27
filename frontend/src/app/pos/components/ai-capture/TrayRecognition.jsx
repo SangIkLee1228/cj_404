@@ -1,19 +1,20 @@
 import styles from '../../pos.module.css';
 import DetectionOverlay from './DetectionOverlay';
-import { MOCK_BBOX_SLOTS } from '../../mock-data/mockProducts';
 
 /**
  * 트레이 촬영/인식 결과 영역.
- * 지금은 Placeholder 도형(TrayImage)을 쓰지만, 실제 AI 연동 시에는
- * 촬영된 트레이 이미지 + detections 목록만 바꿔 끼우면 되도록 분리해 둔다.
+ * AI 추론 서버가 아직 연결되지 않아(POST /scan-sessions/{id}/recognize가 501)
+ * 실제 bbox 데이터가 없다 — 연결되면 detected_items[].bbox를 그대로 여기 꽂으면 된다.
  */
 export default function TrayRecognition({ hasCaptured, aiItems }) {
-  const detections = aiItems.slice(0, 3).map((item, i) => ({
-    id: item.name,
-    name: item.name,
-    confidence: item.confidence,
-    bbox: MOCK_BBOX_SLOTS[i],
-  }));
+  const detections = aiItems
+    .filter((item) => item.bbox)
+    .slice(0, 3)
+    .map((item) => ({
+      id: item.name,
+      name: item.name,
+      bbox: item.bbox,
+    }));
 
   if (!hasCaptured) {
     return (

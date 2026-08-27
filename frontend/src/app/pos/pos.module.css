@@ -37,6 +37,14 @@
 .posRoot *::after {
   box-sizing: border-box;
 }
+.loadingScreen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
 .posRoot button,
 .posRoot input {
   font: inherit;

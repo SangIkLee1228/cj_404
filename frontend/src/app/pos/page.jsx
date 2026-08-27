@@ -61,6 +61,17 @@ export default function PosPage() {
     },
   });
 
+  if (pos.initializing) {
+    return (
+      <div className={styles.posRoot}>
+        <TopBar totalAmount={0} />
+        <div className={styles.loadingScreen}>
+          매장 데이터를 불러오는 중입니다...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.posRoot}>
       <TopBar totalAmount={pos.totalAmount} />

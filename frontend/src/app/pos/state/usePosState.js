@@ -1,417 +1,116 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
+  createOrder,
+  getCurrentOrder,
+  getOrder,
+  addOrderItem,
+  updateOrderItem,
+  deleteOrderItem,
+  connectMember,
+  payOrder,
+  cancelOrder as cancelOrderApi,
+} from '../api/ordersApi';
+import { getProducts, getRecommendations } from '../api/productsApi';
+import { getInventory } from '../api/inventoryApi';
 import {
-  MOCK_ADD_CAPTURE,
-  MOCK_BASIC_CAPTURE,
-  MOCK_INVENTORY_BY_NAME,
-  MOCK_RETAKE_CAPTURE,
-  MOCK_SOLD_TODAY_BY_NAME,
-  MOCK_UNREGISTERED_PHONE,
-  findProductByName,
-} from '../mock-data/mockProducts';
-import { resolveRemaining } from '../sync/posSync';
-import { usePosSync } from '../sync/usePosSync';
-import { computePoints } from '../helpers/formatters';
+  createScanSession,
+  recognizeScanSession,
+} from '../api/scanSessionsApi';
+import { ApiError } from '../api/httpClient';
+import {
+  DRINK_CATALOG,
+  isLocalDrinkId,
+  findDrinkById,
+} from '../data/drinkCatalog';
+import { filterAndOrderBreadProducts } from '../data/allowedBreadProducts';
 
-const MEMBER_NAME = '정우현';
-
-const initialState = {
-  cart: [], // { name, price, qty, source: 'ai'|'manual'|'mixed', confidence, emoji, productId, belowThreshold }
-  capture: {
-    hasCaptured: false,
-    mode: 'basic',
-    screen: 'recognition',
-    scanStartedAt: null,
-  }, // screen: 'recognition' | 'shooting'
-  membership: {
-    phone: '010',
-    memberConfirmed: false,
-    phoneOverlayOpen: false,
-    lookupFailed: false,
-  },
-  payment: { paid: false, failed: false },
-  catalogFilter: { productType: 'bread', category: '전체' },
-  inventoryOverrides: {}, // name -> remainingQty (대시보드 동기화가 없을 때만 쓰는 로컬 폴백)
-  managerState: null, // 점장 대시보드 동기화 상태(sync adapter가 채워 넣는다)
-  correctionCount: 0,
+const initialCapture = { mode: 'basic', screen: 'recognition' };
+const initialMembership = {
+  phone: '010',
+  phoneOverlayOpen: false,
+  lookupFailed: false,
 };
 
-function cartQtyByName(cart, name) {
-  const found = cart.find((item) => item.name === name);
-  return found ? found.qty : 0;
-}
-
-/** incoming 항목을 base에 재고 한도 내에서 병합한다. 동일 상품이면 행을 새로 만들지 않고 수량만 합산한다. */
-function mergeWithStockLimit(base, incoming, managerState, inventoryOverrides) {
-  const out = base.map((item) => ({ ...item }));
-  const skipped = [];
-
-  incoming.forEach((item) => {
-    const remaining = resolveRemaining(
-      managerState,
-      inventoryOverrides,
-      item.name
-    );
-    const existing = out.find((x) => x.name === item.name);
-    const current = existing ? existing.qty : 0;
-    const allowed =
-      remaining === Infinity ? item.qty : Math.max(0, remaining - current);
-    const addQty = Math.min(item.qty, allowed);
-
-    if (addQty <= 0) {
-      skipped.push(item.name);
-      return;
-    }
-    if (existing) {
-      existing.qty += addQty;
-      if (existing.source !== item.source) existing.source = 'mixed';
-      existing.confidence = Math.max(
-        existing.confidence || 0,
-        item.confidence || 0
-      );
-    } else {
-      out.push({
-        ...item,
-        qty: addQty,
-        productId: findProductByName(item.name)?.productId,
-      });
-    }
-    if (addQty < item.qty) skipped.push(item.name);
-  });
-
-  return { items: out, skipped: [...new Set(skipped)] };
-}
-
-const CAPTURE_MOCKS = {
-  basic: MOCK_BASIC_CAPTURE,
-  add: MOCK_ADD_CAPTURE,
-  retake: MOCK_RETAKE_CAPTURE,
-};
-
-function resetMembershipFields(state) {
+/** ORDER_ITEM(서버 필드명) → 기존 컴포넌트가 쓰던 cart item 모양으로 변환한다. BREAD 전용. */
+function mapOrderItem(item) {
+  const source =
+    item.source_type === 'AI_DETECTED'
+      ? 'ai'
+      : item.source_type === 'STAFF_CORRECTED'
+        ? 'mixed'
+        : 'manual';
   return {
-    ...state.membership,
-    phone: '010',
-    memberConfirmed: false,
-    phoneOverlayOpen: false,
-    lookupFailed: false,
+    name: item.product_name,
+    price: item.unit_price,
+    qty: item.quantity,
+    productId: item.product_id,
+    orderItemId: item.order_item_id,
+    source,
+    belowThreshold: item.needs_review,
+    emoji: '🍞',
+    isLocalDrink: false,
   };
 }
 
-function reducer(state, action) {
-  switch (action.type) {
-    case 'SET_MANAGER_STATE':
-      return { ...state, managerState: action.managerState };
+/** PRODUCT/STORE_PRODUCT(서버 필드명) → 카탈로그 카드가 쓰던 모양으로 변환한다. BREAD 전용. */
+function mapProduct(p) {
+  return {
+    productId: p.product_id,
+    name: p.product_name,
+    price: p.price,
+    category: p.category || '기타',
+    productType: p.product_type,
+    imageUrl: p.image_url,
+    emoji: '🍞',
+  };
+}
 
-    case 'CHANGE_QTY': {
-      const { name, delta } = action;
-      const item = state.cart.find((x) => x.name === name);
-      if (!item) return state;
-
-      if (delta > 0) {
-        const remaining = resolveRemaining(
-          state.managerState,
-          state.inventoryOverrides,
-          name
-        );
-        if (remaining !== Infinity && item.qty + delta > remaining) {
-          return { ...state, _stockWarning: { name, remaining } };
-        }
-      }
-
-      const nextQty = Math.max(0, item.qty + delta);
-      const cart =
-        nextQty === 0
-          ? state.cart.filter((x) => x.name !== name)
-          : state.cart.map((x) =>
-              x.name === name ? { ...x, qty: nextQty } : x
-            );
-
-      return {
-        ...state,
-        cart,
-        _stockWarning: null,
-        correctionCount: state.correctionCount + 1,
-      };
-    }
-
-    case 'MANUAL_ADD': {
-      const { name } = action;
-      const product = findProductByName(name);
-      if (!product) return state;
-
-      const remaining = resolveRemaining(
-        state.managerState,
-        state.inventoryOverrides,
-        name
-      );
-      const current = cartQtyByName(state.cart, name);
-      if (remaining !== Infinity && current + 1 > remaining) {
-        return { ...state, _stockWarning: { name, remaining } };
-      }
-
-      const existing = state.cart.find((x) => x.name === name);
-      const cart = existing
-        ? state.cart.map((x) =>
-            x.name === name ? { ...x, qty: x.qty + 1 } : x
-          )
-        : [
-            ...state.cart,
-            {
-              name: product.name,
-              price: product.price,
-              emoji: product.emoji,
-              category: product.category,
-              productId: product.productId,
-              qty: 1,
-              confidence: null,
-              source: 'manual',
-            },
-          ];
-
-      return {
-        ...state,
-        cart,
-        _stockWarning: null,
-        _lastAdded: product.name,
-        correctionCount: state.correctionCount + 1,
-      };
-    }
-
-    case 'APPLY_CAPTURE': {
-      const { mode } = action;
-      const mockItems = CAPTURE_MOCKS[mode].map((x) => ({ ...x }));
-      const manualKept = state.cart.filter((x) => x.source === 'manual');
-      const base = mode === 'add' ? state.cart : manualKept;
-
-      const { items, skipped } = mergeWithStockLimit(
-        base,
-        mockItems,
-        state.managerState,
-        state.inventoryOverrides
-      );
-
-      return {
-        ...state,
-        cart: items,
-        capture: { ...state.capture, hasCaptured: true, screen: 'recognition' },
-        membership: resetMembershipFields(state),
-        _captureSkipped: skipped,
-      };
-    }
-
-    case 'OPEN_CAPTURE_SCREEN': {
-      if (state.payment.paid) return state;
-      return {
-        ...state,
-        capture: {
-          ...state.capture,
-          mode: action.mode,
-          screen: 'shooting',
-          scanStartedAt:
-            state.capture.scanStartedAt || new Date().toISOString(),
-        },
-      };
-    }
-
-    case 'CLOSE_CAPTURE_SCREEN':
-      return { ...state, capture: { ...state.capture, screen: 'recognition' } };
-
-    case 'CANCEL_ORDER': {
-      if (state.payment.paid || state.cart.length === 0) return state;
-      return {
-        ...state,
-        cart: [],
-        capture: {
-          hasCaptured: false,
-          mode: 'basic',
-          screen: 'recognition',
-          scanStartedAt: null,
-        },
-        membership: resetMembershipFields(state),
-        payment: { paid: false, failed: false },
-        correctionCount: 0,
-      };
-    }
-
-    case 'OPEN_MEMBERSHIP': {
-      if (
-        state.cart.length === 0 ||
-        state.payment.paid ||
-        state.membership.memberConfirmed
-      )
-        return state;
-      return {
-        ...state,
-        membership: {
-          ...state.membership,
-          phone: '010',
-          phoneOverlayOpen: true,
-        },
-      };
-    }
-
-    case 'PHONE_KEY': {
-      const { key } = action;
-      let { phone } = state.membership;
-      if (key === 'back') {
-        phone = phone.length > 3 ? phone.slice(0, -1) : phone;
-      } else if (phone.length < 11) {
-        phone += key;
-      }
-      return {
-        ...state,
-        membership: { ...state.membership, phone, lookupFailed: false },
-      };
-    }
-
-    case 'CANCEL_PHONE':
-      return {
-        ...state,
-        membership: {
-          ...state.membership,
-          phoneOverlayOpen: false,
-          lookupFailed: false,
-          phone: '010',
-        },
-      };
-
-    case 'CONFIRM_PHONE': {
-      if (state.membership.phone.length !== 11) return state;
-      // 미등록 회원(Mock) — 조회 실패와 미입력/건너뛰기(정상 경로)를 구분한다.
-      if (state.membership.phone === MOCK_UNREGISTERED_PHONE) {
-        return {
-          ...state,
-          membership: { ...state.membership, lookupFailed: true, phone: '010' },
-        };
-      }
-      return {
-        ...state,
-        membership: {
-          ...state.membership,
-          memberConfirmed: true,
-          phoneOverlayOpen: false,
-          lookupFailed: false,
-        },
-      };
-    }
-
-    case 'PAY': {
-      if (state.cart.length === 0 || state.payment.paid) return state;
-
-      const insufficient = state.cart.filter((item) => {
-        const remaining = resolveRemaining(
-          state.managerState,
-          state.inventoryOverrides,
-          item.name
-        );
-        return remaining !== Infinity && item.qty > remaining;
-      });
-      if (insufficient.length > 0) {
-        return {
-          ...state,
-          _stockWarning: { names: insufficient.map((x) => x.name) },
-        };
-      }
-
-      // 대시보드 동기화가 없는 독립 실행(로컬 폴백)에서도 재고가 줄어들도록 유지한다.
-      const inventoryOverrides = { ...state.inventoryOverrides };
-      state.cart.forEach((item) => {
-        if (item.name in MOCK_INVENTORY_BY_NAME) {
-          const remaining = resolveRemaining(
-            null,
-            inventoryOverrides,
-            item.name
-          );
-          inventoryOverrides[item.name] = Math.max(0, remaining - item.qty);
-        }
-      });
-
-      const totalAmount = state.cart.reduce(
-        (sum, item) => sum + item.qty * item.price,
-        0
-      );
-      return {
-        ...state,
-        inventoryOverrides,
-        payment: { paid: true, failed: false },
-        _stockWarning: null,
-        _pendingOrder: {
-          cartItems: state.cart.map((item) => ({ ...item })),
-          member: state.membership.memberConfirmed,
-          points: computePoints(totalAmount),
-          hasCaptured: state.capture.hasCaptured,
-          correctionCount: state.correctionCount,
-          scanStartedAt: state.capture.scanStartedAt,
-        },
-      };
-    }
-
-    case 'CLEAR_PENDING_ORDER':
-      return { ...state, _pendingOrder: null };
-
-    // 결제망 미연동 상태에서 실패 UI/복구 흐름을 검증하기 위한 결정론적 테스트 전용
-    // 경로. 정상 사용자 결제 경로에서는 절대 자동 호출되지 않는다 — window 전역
-    // 훅(dev 빌드에서만 노출)을 통해 브라우저 테스트가 명시적으로 호출할 때만 실행된다.
-    case 'DEV_FORCE_PAYMENT_FAILURE': {
-      if (state.cart.length === 0 || state.payment.paid) return state;
-      return { ...state, payment: { paid: false, failed: true } };
-    }
-
-    case 'NEW_ORDER':
-      return {
-        ...state,
-        cart: [],
-        capture: {
-          hasCaptured: false,
-          mode: 'basic',
-          screen: 'recognition',
-          scanStartedAt: null,
-        },
-        membership: resetMembershipFields(state),
-        payment: { paid: false, failed: false },
-        correctionCount: 0,
-      };
-
-    case 'SET_CATALOG_TYPE':
-      return {
-        ...state,
-        catalogFilter: { productType: action.productType, category: '전체' },
-      };
-
-    case 'SET_CATALOG_CATEGORY':
-      return {
-        ...state,
-        catalogFilter: { ...state.catalogFilter, category: action.category },
-      };
-
-    case 'CLEAR_STOCK_WARNING':
-      return { ...state, _stockWarning: null };
-
-    case 'CLEAR_CAPTURE_SKIPPED':
-      return { ...state, _captureSkipped: null };
-
-    case 'CLEAR_LAST_ADDED':
-      return { ...state, _lastAdded: null };
-
-    default:
-      return state;
-  }
+/** localDrinkItems(수량 맵) → 기존 컴포넌트가 쓰던 cart item 모양으로 변환한다. */
+function mapDrinkCartItem(entry) {
+  const drink = findDrinkById(entry.productId);
+  return {
+    name: drink.name,
+    price: drink.price,
+    qty: entry.qty,
+    productId: drink.productId,
+    orderItemId: null,
+    source: 'manual',
+    belowThreshold: false,
+    emoji: drink.emoji,
+    isLocalDrink: true,
+  };
 }
 
 export function usePosState() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [orderId, setOrderId] = useState(null);
+  const [orderRaw, setOrderRaw] = useState(null); // 서버 OrderDetail 원본 — BREAD 전용
+  const [breadProducts, setBreadProducts] = useState([]);
+  const [localDrinkItems, setLocalDrinkItems] = useState([]); // [{productId, qty}] — Frontend-only
+  const [drinkPaid, setDrinkPaid] = useState(false); // 음료 몫의 "결제 완료" 로컬 표시 상태
+  const [remainingByProductId, setRemainingByProductId] = useState({});
+  const [popularTop3, setPopularTop3] = useState([]);
+  const [initializing, setInitializing] = useState(true);
+  const [capture, setCapture] = useState(initialCapture);
+  const [hasCaptured, setHasCaptured] = useState(false);
+  const [membership, setMembership] = useState(initialMembership);
+  const [paymentFailed, setPaymentFailed] = useState(false);
+  const [isShooting, setIsShooting] = useState(false);
+  const [catalogFilter, setCatalogFilter] = useState({
+    productType: 'bread',
+    category: '전체',
+  });
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
-  const posSync = usePosSync();
+  const captureRunRef = useRef(0);
+
+  // 카탈로그 카드 그리드는 BREAD(backend)와 DRINK(frontend-only)를 합쳐서 그대로 쓴다 —
+  // ProductCatalog/ProductCard는 이 배열의 출처를 몰라도 되게 만든다.
+  const products = useMemo(
+    () => [...breadProducts, ...DRINK_CATALOG],
+    [breadProducts]
+  );
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -419,216 +118,407 @@ export function usePosState() {
     toastTimer.current = setTimeout(() => setToast(null), 1800);
   }, []);
 
-  const activeCart = state.cart.filter((item) => item.qty > 0);
+  const refreshInventory = useCallback(async () => {
+    try {
+      const res = await getInventory();
+      const map = {};
+      res.items.forEach((row) => {
+        map[row.product_id] = row.remaining_qty;
+      });
+      setRemainingByProductId(map);
+    } catch {
+      // 재고 조회 실패는 화면을 막지 않는다 — 매진 표시만 못 하고 넘어간다.
+    }
+  }, []);
+
+  // 최초 진입: 진행 중 주문 복구(없으면 생성) + BREAD 카탈로그 + 재고를 불러온다.
+  // DRINK는 backend를 전혀 부르지 않는다(DRINK_CATALOG는 정적 import).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [current, bread] = await Promise.all([
+          getCurrentOrder(),
+          getProducts('BREAD'),
+        ]);
+        if (cancelled) return;
+        const order = current || (await createOrder());
+        if (cancelled) return;
+        setOrderId(order.order_id);
+        setOrderRaw(order);
+        setBreadProducts(
+          filterAndOrderBreadProducts(bread.items).map(mapProduct)
+        );
+        await refreshInventory();
+      } catch (err) {
+        if (!cancelled)
+          showToast(err?.message || '초기 데이터를 불러오지 못했습니다.');
+      } finally {
+        if (!cancelled) setInitializing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const breadCart = useMemo(
+    () => orderRaw?.items?.map(mapOrderItem) || [],
+    [orderRaw]
+  );
+  const drinkCart = useMemo(
+    () => localDrinkItems.map(mapDrinkCartItem),
+    [localDrinkItems]
+  );
+  // 화면에는 BREAD(backend 주문)와 DRINK(local state)를 하나의 장바구니처럼 합쳐서 보여준다.
+  const activeCart = useMemo(
+    () => [...breadCart, ...drinkCart].filter((item) => item.qty > 0),
+    [breadCart, drinkCart]
+  );
+  const activeBreadCart = useMemo(
+    () => breadCart.filter((item) => item.qty > 0),
+    [breadCart]
+  );
+  const activeDrinkCart = useMemo(
+    () => drinkCart.filter((item) => item.qty > 0),
+    [drinkCart]
+  );
   const totalCount = activeCart.reduce((sum, item) => sum + item.qty, 0);
-  const totalAmount = activeCart.reduce(
-    (sum, item) => sum + item.qty * item.price,
+  const drinkTotalAmount = activeDrinkCart.reduce(
+    (sum, item) => sum + item.price * item.qty,
     0
   );
-  const points = computePoints(totalAmount);
+  // 화면 총액 = Backend BREAD 합계 + Frontend DRINK 합계.
+  const totalAmount = (orderRaw?.total_amount ?? 0) + drinkTotalAmount;
+  const points = orderRaw?.point_earned ?? 0; // 적립은 BREAD(backend) 기준 그대로 — DRINK로 늘리지 않는다.
+  // "결제 완료" 표시는 BREAD가 결제됐거나(backend), DRINK만 있는 채로 로컬 결제 처리됐으면 true다.
+  const paid = orderRaw?.status === 'PAID' || drinkPaid;
+  const memberConfirmed = !!orderRaw?.member;
+  const memberName = orderRaw?.member?.name ?? '';
 
-  // 대시보드 동기화 상태를 리듀서로 흘려보낸다 — 이후 모든 재고/카탈로그 판단은 리듀서 안에서 일관되게 처리된다.
+  // 추천은 실제 backend 주문(BREAD)에 담긴 것이 있을 때만 부른다 — DRINK 담기 때문에
+  // 새 backend 요청이 생기면 안 되므로 activeBreadCart를 기준으로 삼는다.
   useEffect(() => {
-    dispatch({ type: 'SET_MANAGER_STATE', managerState: posSync.managerState });
-  }, [posSync.managerState]);
-
-  useEffect(() => {
-    posSync.setScreen(
-      state.payment.paid ? 'PAID' : activeCart.length > 0 ? 'ACTIVE' : 'READY'
-    );
-  });
-
-  // 결제 완료 시 커밋할 주문이 쌓이면 sync adapter를 통해 대시보드 쪽 공유 상태에 반영한다.
-  useEffect(() => {
-    if (!state._pendingOrder) return;
-    posSync.commitOrder(state._pendingOrder);
-    dispatch({ type: 'CLEAR_PENDING_ORDER' });
-  }, [state._pendingOrder, posSync]);
-
-  // 결제 실패 UI/복구 흐름을 브라우저 테스트에서 결정론적으로 재현하기 위한 훅.
-  // 프로덕션 빌드에는 포함하지 않는다 — 정상 결제 경로에는 어떤 영향도 주지 않는다.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (process.env.NODE_ENV === 'production') return;
-    window.__posForcePaymentFailure = () =>
-      dispatch({ type: 'DEV_FORCE_PAYMENT_FAILURE' });
+    if (!orderId || activeBreadCart.length === 0 || paid) {
+      setPopularTop3([]);
+      return;
+    }
+    let cancelled = false;
+    getRecommendations({ orderId, productType: 'ALL', limit: 3 })
+      .then((res) => {
+        if (cancelled) return;
+        setPopularTop3(
+          res.items.map((p) => ({
+            productId: p.product_id,
+            name: p.product_name,
+            price: p.price,
+            emoji: p.product_type === 'BREAD' ? '🍞' : '☕',
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPopularTop3([]);
+      });
     return () => {
-      delete window.__posForcePaymentFailure;
+      cancelled = true;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, activeBreadCart.length, paid]);
 
   const remainingOf = useCallback(
-    (name) =>
-      resolveRemaining(state.managerState, state.inventoryOverrides, name),
-    [state.managerState, state.inventoryOverrides]
+    (productId) => {
+      if (isLocalDrinkId(productId)) return Infinity; // DRINK는 backend 재고 조회 대상이 아니다.
+      return remainingByProductId[productId] ?? Infinity;
+    },
+    [remainingByProductId]
   );
 
-  const popularTop3 = useMemo(() => {
-    const candidates = Object.entries(MOCK_SOLD_TODAY_BY_NAME)
-      .map(([name, soldToday]) => {
-        const product = findProductByName(name);
-        if (!product) return null;
-        const remaining = resolveRemaining(
-          state.managerState,
-          state.inventoryOverrides,
-          name
+  const runOrderMutation = useCallback(
+    async (mutate) => {
+      try {
+        const updated = await mutate();
+        setOrderRaw(updated);
+        return updated;
+      } catch (err) {
+        if (
+          err instanceof ApiError &&
+          (err.code === 'AMOUNT_STALE' || err.code === 'ORDER_CHANGED')
+        ) {
+          const fresh = await getOrder(orderId);
+          setOrderRaw(fresh);
+          showToast(
+            '주문 내용이 갱신되어 다시 불러왔습니다. 다시 시도해주세요.'
+          );
+          return fresh;
+        }
+        showToast(err?.message || '요청을 처리하지 못했습니다.');
+        return null;
+      }
+    },
+    [orderId, showToast]
+  );
+
+  const manualAdd = useCallback(
+    (productId) => {
+      if (isLocalDrinkId(productId)) {
+        const drink = findDrinkById(productId);
+        if (!drink) return;
+        setLocalDrinkItems((prev) => {
+          const existing = prev.find((x) => x.productId === productId);
+          if (existing) {
+            return prev.map((x) =>
+              x.productId === productId ? { ...x, qty: x.qty + 1 } : x
+            );
+          }
+          return [...prev, { productId, qty: 1 }];
+        });
+        showToast(`${drink.name} 1개를 추가했습니다.`);
+        return;
+      }
+      const product = breadProducts.find((p) => p.productId === productId);
+      runOrderMutation(() => addOrderItem(orderId, productId, 1)).then(
+        (updated) => {
+          if (updated && product)
+            showToast(`${product.name} 1개를 추가했습니다.`);
+        }
+      );
+    },
+    [orderId, breadProducts, runOrderMutation, showToast]
+  );
+
+  const changeQty = useCallback(
+    (name, delta) => {
+      const item = activeCart.find((x) => x.name === name);
+      if (!item) return;
+      const nextQty = item.qty + delta;
+      if (item.isLocalDrink) {
+        setLocalDrinkItems((prev) =>
+          nextQty <= 0
+            ? prev.filter((x) => x.productId !== item.productId)
+            : prev.map((x) =>
+                x.productId === item.productId ? { ...x, qty: nextQty } : x
+              )
         );
-        if (remaining !== Infinity && remaining <= 0) return null;
-        const stockRemaining = remaining === Infinity ? 999 : remaining;
-        return {
-          ...product,
-          soldToday,
-          remaining: stockRemaining,
-          score: soldToday * 10 - stockRemaining,
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score);
-    return candidates.slice(0, 3);
-  }, [state.managerState, state.inventoryOverrides]);
-
-  const customerViewState =
-    state.capture.screen === 'shooting' || activeCart.length === 0
-      ? 'greeting'
-      : 'order';
-
-  useEffect(() => {
-    if (!state._stockWarning) return;
-    const w = state._stockWarning;
-    const message = w.names
-      ? `재고 부족: ${w.names.join(', ')}`
-      : w.remaining <= 0
-        ? `${w.name}은(는) 매진되어 더 담을 수 없습니다.`
-        : `${w.name}은(는) 재고 ${w.remaining}개까지만 담을 수 있습니다.`;
-    showToast(message);
-    dispatch({ type: 'CLEAR_STOCK_WARNING' });
-  }, [state._stockWarning, showToast]);
-
-  useEffect(() => {
-    if (!state._captureSkipped) return;
-    const skipped = state._captureSkipped;
-    const modeLabel =
-      { basic: '기본 촬영', add: '추가 촬영', retake: '다시 촬영' }[
-        state.capture.mode
-      ] || '촬영';
-    const successMessage = {
-      basic: '기본 촬영 결과를 반영했습니다.',
-      add: '추가 촬영 상품을 기존 계산에 더했습니다.',
-      retake: '다시 촬영한 AI 결과로 기존 인식 항목을 수정했습니다.',
-    }[state.capture.mode];
-    showToast(
-      skipped.length
-        ? `${modeLabel} 반영 · 매진/재고부족 제외: ${skipped.join(', ')}`
-        : successMessage
-    );
-    dispatch({ type: 'CLEAR_CAPTURE_SKIPPED' });
-  }, [state._captureSkipped, state.capture.mode, showToast]);
-
-  useEffect(() => {
-    if (!state._lastAdded) return;
-    showToast(`${state._lastAdded} 1개를 추가했습니다.`);
-    dispatch({ type: 'CLEAR_LAST_ADDED' });
-  }, [state._lastAdded, showToast]);
-
-  const applyCapture = useCallback((mode) => {
-    dispatch({ type: 'APPLY_CAPTURE', mode });
-  }, []);
-
-  const changeQty = useCallback((name, delta) => {
-    dispatch({ type: 'CHANGE_QTY', name, delta });
-  }, []);
-
-  const manualAdd = useCallback((name) => {
-    dispatch({ type: 'MANUAL_ADD', name });
-  }, []);
-
-  const pay = useCallback(() => {
-    dispatch({ type: 'PAY' });
-  }, []);
-
-  const cancelOrder = useCallback(() => {
-    if (state.payment.paid || state.cart.length === 0) return;
-    dispatch({ type: 'CANCEL_ORDER' });
-    showToast('계산을 취소했습니다. 판매·재고에는 반영되지 않습니다.');
-  }, [showToast, state.payment.paid, state.cart.length]);
-
-  const newOrder = useCallback(() => dispatch({ type: 'NEW_ORDER' }), []);
-  const openMembership = useCallback(
-    () => dispatch({ type: 'OPEN_MEMBERSHIP' }),
-    []
-  );
-  const phoneKey = useCallback(
-    (key) => dispatch({ type: 'PHONE_KEY', key }),
-    []
-  );
-  const cancelPhone = useCallback(() => dispatch({ type: 'CANCEL_PHONE' }), []);
-  const confirmPhone = useCallback(
-    () => dispatch({ type: 'CONFIRM_PHONE' }),
-    []
-  );
-  const openCaptureScreen = useCallback(
-    (mode) => dispatch({ type: 'OPEN_CAPTURE_SCREEN', mode }),
-    []
-  );
-  const setCatalogType = useCallback(
-    (productType) => dispatch({ type: 'SET_CATALOG_TYPE', productType }),
-    []
-  );
-  const setCatalogCategory = useCallback(
-    (category) => dispatch({ type: 'SET_CATALOG_CATEGORY', category }),
-    []
+        return;
+      }
+      if (nextQty <= 0) {
+        runOrderMutation(() => deleteOrderItem(orderId, item.orderItemId));
+        return;
+      }
+      runOrderMutation(() =>
+        updateOrderItem(orderId, item.orderItemId, { quantity: nextQty })
+      );
+    },
+    [activeCart, orderId, runOrderMutation]
   );
 
   const removeItem = useCallback(
     (name) => {
-      const item = state.cart.find((x) => x.name === name);
+      const item = activeCart.find((x) => x.name === name);
       if (!item) return;
-      dispatch({ type: 'CHANGE_QTY', name, delta: -item.qty });
+      if (item.isLocalDrink) {
+        setLocalDrinkItems((prev) =>
+          prev.filter((x) => x.productId !== item.productId)
+        );
+        return;
+      }
+      runOrderMutation(() => deleteOrderItem(orderId, item.orderItemId));
     },
-    [state.cart]
+    [activeCart, orderId, runOrderMutation]
   );
 
-  // 촬영 처리(Mock)에는 타임아웃이 없다 — 진행 중 화면을 벗어나면 반드시 여기서
-  // clearTimeout으로 취소해, 이미 떠난 뒤에 결과가 뒤늦게 Cart에 반영되는(stale
-  // callback) 상황을 막는다.
-  const shootingRef = useRef(false);
-  const shootTimeoutRef = useRef(null);
-  const [isShooting, setIsShooting] = useState(false);
-  const shoot = useCallback(() => {
-    if (shootingRef.current) return;
-    shootingRef.current = true;
-    setIsShooting(true);
-    shootTimeoutRef.current = setTimeout(() => {
-      shootTimeoutRef.current = null;
-      applyCapture(state.capture.mode);
-      shootingRef.current = false;
-      setIsShooting(false);
-    }, 650);
-  }, [applyCapture, state.capture.mode]);
+  const resetLocalUiState = useCallback(() => {
+    setCapture(initialCapture);
+    setMembership(initialMembership);
+    setPaymentFailed(false);
+    setHasCaptured(false);
+    setLocalDrinkItems([]);
+    setDrinkPaid(false);
+  }, []);
 
-  const cancelShoot = useCallback(() => {
-    if (shootTimeoutRef.current) {
-      clearTimeout(shootTimeoutRef.current);
-      shootTimeoutRef.current = null;
+  const cancelOrder = useCallback(async () => {
+    if (paid || activeCart.length === 0) return;
+    try {
+      await cancelOrderApi(orderId);
+      const fresh = await createOrder();
+      setOrderId(fresh.order_id);
+      setOrderRaw(fresh);
+      resetLocalUiState();
+      showToast('계산을 취소했습니다. 판매·재고에는 반영되지 않습니다.');
+    } catch (err) {
+      showToast(err?.message || '계산 취소에 실패했습니다.');
     }
-    shootingRef.current = false;
-    setIsShooting(false);
+  }, [orderId, paid, activeCart.length, resetLocalUiState, showToast]);
+
+  const newOrder = useCallback(async () => {
+    try {
+      const fresh = await createOrder();
+      setOrderId(fresh.order_id);
+      setOrderRaw(fresh);
+      resetLocalUiState();
+      await refreshInventory();
+    } catch (err) {
+      showToast(err?.message || '새 주문을 시작하지 못했습니다.');
+    }
+  }, [resetLocalUiState, refreshInventory, showToast]);
+
+  // BREAD가 있으면 그 몫만 backend pay로 결제하고, DRINK 몫은 항상 로컬에서
+  // 결제 완료 처리한다 — DRINK를 backend 주문 항목으로 만들어 끼워 넣지 않는다.
+  const pay = useCallback(async () => {
+    if (activeCart.length === 0 || paid) return;
+    try {
+      if (activeBreadCart.length > 0) {
+        await payOrder(orderId, 'CARD', 0);
+        // pay 응답에는 items가 없으므로 확정 주문 상세를 다시 받아 화면을 채운다.
+        const fresh = await getOrder(orderId);
+        setOrderRaw(fresh);
+        await refreshInventory();
+      }
+      setDrinkPaid(true);
+      setPaymentFailed(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setPaymentFailed(true);
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        (err.code === 'AMOUNT_STALE' || err.code === 'ORDER_CHANGED')
+      ) {
+        const fresh = await getOrder(orderId);
+        setOrderRaw(fresh);
+        showToast('주문 내용이 바뀌어 다시 불러왔습니다. 다시 결제해주세요.');
+        return;
+      }
+      showToast(err?.message || '결제에 실패했습니다.');
+    }
+  }, [
+    orderId,
+    activeCart.length,
+    activeBreadCart.length,
+    paid,
+    refreshInventory,
+    showToast,
+  ]);
+
+  const openMembership = useCallback(() => {
+    if (activeCart.length === 0 || paid || memberConfirmed) return;
+    setMembership({
+      phone: '010',
+      phoneOverlayOpen: true,
+      lookupFailed: false,
+    });
+  }, [activeCart.length, paid, memberConfirmed]);
+
+  const phoneKey = useCallback((key) => {
+    setMembership((m) => {
+      let phone = m.phone;
+      if (key === 'back') phone = phone.length > 3 ? phone.slice(0, -1) : phone;
+      else if (phone.length < 11) phone += key;
+      return { ...m, phone, lookupFailed: false };
+    });
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (shootTimeoutRef.current) clearTimeout(shootTimeoutRef.current);
-    };
+  const cancelPhone = useCallback(() => {
+    setMembership({
+      phone: '010',
+      phoneOverlayOpen: false,
+      lookupFailed: false,
+    });
   }, []);
+
+  const confirmPhone = useCallback(async () => {
+    if (membership.phone.length !== 11) return;
+    try {
+      const updated = await connectMember(orderId, membership.phone);
+      setOrderRaw(updated);
+      setMembership({
+        phone: '010',
+        phoneOverlayOpen: false,
+        lookupFailed: false,
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setMembership({
+          phone: '010',
+          phoneOverlayOpen: true,
+          lookupFailed: true,
+        });
+        return;
+      }
+      showToast(err?.message || 'CJ ONE 조회에 실패했습니다.');
+    }
+  }, [orderId, membership.phone, showToast]);
+
+  const openCaptureScreen = useCallback(
+    (mode) => {
+      if (paid) return;
+      setCapture({ mode, screen: 'shooting' });
+    },
+    [paid]
+  );
 
   const closeCaptureScreen = useCallback(() => {
-    cancelShoot();
-    dispatch({ type: 'CLOSE_CAPTURE_SCREEN' });
-  }, [cancelShoot]);
+    captureRunRef.current += 1; // 진행 중이던 shoot() 결과를 무효화한다.
+    setIsShooting(false);
+    setCapture((c) => ({ ...c, screen: 'recognition' }));
+  }, []);
+
+  // AI 추론 서버는 아직 연결 전이라(명세서 5.4, 항상 501) 실제 이미지 업로드 없이
+  // 세션만 만들고 recognize를 호출해 "미연결" 안내로 이어지는 FR-10 경로를 그대로 탄다.
+  // (AI/촬영은 BREAD 전용 개념이며 이번 작업 대상이 아니다 — 그대로 둔다.)
+  const shoot = useCallback(() => {
+    if (isShooting) return;
+    setIsShooting(true);
+    const runId = ++captureRunRef.current;
+    (async () => {
+      try {
+        const session = await createScanSession({
+          orderId,
+          captureType: capture.mode.toUpperCase(),
+        });
+        const result = await recognizeScanSession(session.scan_session_id);
+        if (captureRunRef.current !== runId) return; // 화면을 벗어났으면 결과를 버린다.
+        setHasCaptured(true);
+        if (result?.notImplemented) {
+          showToast(
+            'AI 인식 서버가 아직 연결되지 않았습니다. 직접 추가로 진행해주세요.'
+          );
+        }
+      } catch (err) {
+        if (captureRunRef.current !== runId) return;
+        showToast(err?.message || '촬영 처리에 실패했습니다.');
+      } finally {
+        if (captureRunRef.current === runId) {
+          setIsShooting(false);
+          setCapture((c) => ({ ...c, screen: 'recognition' }));
+        }
+      }
+    })();
+  }, [isShooting, orderId, capture.mode, showToast]);
+
+  const setCatalogType = useCallback((productType) => {
+    setCatalogFilter({ productType, category: '전체' });
+  }, []);
+  const setCatalogCategory = useCallback((category) => {
+    setCatalogFilter((f) => ({ ...f, category }));
+  }, []);
+
+  const customerViewState =
+    capture.screen === 'shooting' || activeCart.length === 0
+      ? 'greeting'
+      : 'order';
 
   return {
-    state,
-    dispatch,
+    state: {
+      capture: { ...capture, hasCaptured },
+      membership: { ...membership, memberConfirmed },
+      payment: { paid, failed: paymentFailed },
+      catalogFilter,
+    },
+    initializing,
+    products,
     activeCart,
     totalCount,
     totalAmount,
@@ -636,12 +526,11 @@ export function usePosState() {
     remainingOf,
     popularTop3,
     customerViewState,
-    memberName: MEMBER_NAME,
+    memberName,
     toast,
     showToast,
     changeQty,
     manualAdd,
-    applyCapture,
     pay,
     cancelOrder,
     newOrder,
