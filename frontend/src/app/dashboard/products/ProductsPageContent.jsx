@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import SegmentedControl from '../components/ui/SegmentedControl';
@@ -12,10 +13,17 @@ import dashboardLayoutStyles from '../dashboard-layout.module.css';
 import styles from './products.module.css';
 import {
   DEFAULT_PRODUCTS_QUERY,
-  queryMockProductsList,
+  PRODUCT_TYPE_FILTER_OPTIONS,
+  buildProductsApiQuery,
   mapProductsResponseToPageInfo,
 } from './products-data';
-import { PRODUCT_TYPE_FILTER_OPTIONS } from './products-mock-data';
+import {
+  productsQueryKeys,
+  fetchProductsList,
+  createProduct,
+  updateProduct,
+} from '../api/products-api';
+import { DashboardApiError } from '../api/dashboard-api';
 
 // API 응답의 product_type 값을 화면 표시용 한글 라벨로 매핑만 하는
 // 상수(새 판정 로직 없음).
@@ -47,6 +55,7 @@ function getFillThresholdLabel(item) {
 }
 
 export default function ProductsPageContent() {
+  const queryClient = useQueryClient();
   const [queryState, setQueryState] = useState(DEFAULT_PRODUCTS_QUERY);
   // 상품 추가·수정 모달이 다루는 대상. null이면 모달이 닫힌 상태다.
   // { mode: 'create', item: null } 또는 { mode: 'edit', item } 형태로만
@@ -58,15 +67,48 @@ export default function ProductsPageContent() {
   // 되돌릴 곳"을 ProductFormModal에 명시적으로 넘기기 위함이다.
   const productFormTriggerRef = useRef(null);
 
+  // 상품 추가·수정(POST/PATCH) mutation. backend에 idempotency/동시성
+  // 방어가 없으므로 isPending 동안 버튼(disabled)과 아래 handler들
+  // 양쪽 모두에서 중복 제출·모달 전환을 막는다. 성공 시에는 응답만으로
+  // cache를 직접 patch하지 않고, Products namespace 전체를 invalidate해
+  // 현재 필터/페이지 목록을 실제 GET으로 다시 조회한다 — 상품 유형이
+  // 바뀌어 현재 필터에서 벗어나면 목록에서 자연스럽게 사라지는 것도
+  // 정상 동작으로 그대로 반영한다.
+  const productMutation = useMutation({
+    mutationFn: (payload) =>
+      productFormState?.mode === 'edit'
+        ? updateProduct(productFormState.item.product_id, payload)
+        : createProduct(payload),
+    onSuccess: () => {
+      setProductFormState(null);
+      queryClient.invalidateQueries({ queryKey: productsQueryKeys.all });
+    },
+  });
+
+  // 409(중복 상품명)만 구체적으로 안내하고, 그 외 실패는 공통 문구로
+  // 안전하게 표시한다 — 서버 원문은 노출하지 않는다.
+  const productSubmitErrorMessage = productMutation.isError
+    ? productMutation.error instanceof DashboardApiError &&
+      productMutation.error.status === 409
+      ? '이미 등록된 상품명입니다. 다른 상품명을 입력해주세요.'
+      : '상품 저장에 실패했습니다. 다시 시도해주세요.'
+    : null;
+
   function handleProductTypeChange(productType) {
     setQueryState((prev) => ({ ...prev, productType, page: 1 }));
   }
 
-  // 41개 규모의 Mock 데이터를 매 렌더링마다 다시 조회해도 비용이 미미해
-  // useMemo 없이 단순 계산으로 둔다. 컴포넌트에서 직접 filter/sort/slice를
-  // 구현하지 않고, 두 함수의 반환값만 그대로 화면에 옮긴다.
-  const productsResponse = queryMockProductsList(queryState);
-  const pageInfo = mapProductsResponseToPageInfo(productsResponse);
+  // 상품 목록 query. normalizedQuery(=buildProductsApiQuery 결과)를
+  // queryKey에 그대로 실어 상품 유형·페이지 조합마다 별도로 캐시된다.
+  // Foundation의 retry/refetchOnWindowFocus 기본 정책을 그대로 쓴다.
+  const normalizedQuery = buildProductsApiQuery(queryState);
+  const productsQuery = useQuery({
+    queryKey: productsQueryKeys.list(normalizedQuery),
+    queryFn: ({ signal }) => fetchProductsList(queryState, { signal }),
+  });
+  const pageInfo = productsQuery.isSuccess
+    ? mapProductsResponseToPageInfo(productsQuery.data)
+    : null;
 
   // 이전/다음 버튼은 disabled 상태에서 호출되지 않지만, page 값 자체도
   // 1과 totalPages 밖으로 나가지 않도록 한 번 더 방어한다.
@@ -77,24 +119,42 @@ export default function ProductsPageContent() {
   function handleNextPage() {
     setQueryState((prev) => ({
       ...prev,
-      page: Math.min(pageInfo.totalPages, prev.page + 1),
+      page: Math.min(pageInfo?.totalPages ?? prev.page, prev.page + 1),
     }));
   }
 
   function handleOpenCreateProduct(event) {
+    // mutation 진행 중에는 다른 모달로 전환하지 않는다.
+    if (productMutation.isPending) {
+      return;
+    }
     productFormTriggerRef.current = event.currentTarget;
+    // 새 모달을 열 때 이전 상품의 mutation 실패 상태를 남겨두지 않는다.
+    productMutation.reset();
     setProductFormState({ mode: 'create', item: null });
   }
 
   function handleOpenEditProduct(item, event) {
+    if (productMutation.isPending) {
+      return;
+    }
     productFormTriggerRef.current = event.currentTarget;
+    productMutation.reset();
     setProductFormState({ mode: 'edit', item });
   }
 
   function handleProductFormOpenChange(nextOpen) {
     if (!nextOpen) {
       setProductFormState(null);
+      productMutation.reset();
     }
+  }
+
+  function handleProductFormSubmit(payload) {
+    if (productMutation.isPending) {
+      return;
+    }
+    productMutation.mutate(payload);
   }
 
   return (
@@ -121,6 +181,7 @@ export default function ProductsPageContent() {
               type="button"
               variant="primary"
               leadingIcon={<Plus aria-hidden="true" />}
+              disabled={productMutation.isPending}
               onClick={handleOpenCreateProduct}
             >
               상품 추가
@@ -130,7 +191,27 @@ export default function ProductsPageContent() {
       />
       <div className={dashboardLayoutStyles.pageContent}>
         <TableCard>
-          {pageInfo.total === 0 ? (
+          {productsQuery.isPending ? (
+            <p
+              className={styles.tableEmpty}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              상품 목록을 불러오는 중입니다.
+            </p>
+          ) : productsQuery.isError ? (
+            <>
+              <p className={styles.tableEmpty} role="alert">
+                상품 목록을 불러오지 못했습니다.
+              </p>
+              <div className={styles.stateActions}>
+                <Button onClick={() => productsQuery.refetch()}>
+                  다시 시도
+                </Button>
+              </div>
+            </>
+          ) : pageInfo.total === 0 ? (
             <p
               className={styles.tableEmpty}
               role="status"
@@ -196,6 +277,7 @@ export default function ProductsPageContent() {
                           <Button
                             type="button"
                             variant="primary"
+                            disabled={productMutation.isPending}
                             onClick={(event) =>
                               handleOpenEditProduct(item, event)
                             }
@@ -253,6 +335,9 @@ export default function ProductsPageContent() {
         open={productFormState !== null}
         onOpenChange={handleProductFormOpenChange}
         returnFocusRef={productFormTriggerRef}
+        onSubmit={handleProductFormSubmit}
+        isSubmitting={productMutation.isPending}
+        submitError={productSubmitErrorMessage}
       />
     </section>
   );
