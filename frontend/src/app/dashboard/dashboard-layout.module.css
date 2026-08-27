@@ -158,6 +158,30 @@
   border-top: 1px solid var(--dashboard-color-sidebar-border);
 }
 
+/* 읽지 않은 알림 개수 배지. Dashboard 목업의 stock-meter-fill(주황)/
+   on-brand(흰색) 토큰을 재사용한다 — 새 hex/rgb 없음. status-out(경고
+   배지)과 색을 분리해 "읽지 않음" 개수 의미가 매진 경고와 섞이지
+   않는다. margin-left: auto로 .navItem(flex) 오른쪽 끝에 붙고, 한 자리·
+   두 자리·"99+" 모두 min-width만 바닥으로 두고 padding으로 자연스럽게
+   늘어난다. */
+.sidebarAlertBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dashboard-color-stock-meter-fill);
+  color: var(--dashboard-color-on-brand);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
 /* storeName/managerName의 왼쪽 시작점을 메뉴 아이콘 컨테이너의
    왼쪽 시작점(.navItem의 padding-left)과 맞춘다. */
 .storeInfo {
