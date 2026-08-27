@@ -1430,6 +1430,12 @@
   font-family:
     'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
+.kioskImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 .kioskInfo {
   flex: 0 0 auto;
   min-height: 41px;
