@@ -297,6 +297,25 @@
   text-align: center;
 }
 
+/* 긴급 보충 영역의 loading/error 상태 문구. NoticeCard 없이 contentStack
+   안에 바로 표시되므로 tableEmpty와 별도로 얕은 padding만 둔다. */
+.urgentStatusMessage {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 목록/긴급 보충 오류 상태의 "다시 시도" 버튼 배치 전용 wrapper. 각
+   상태 문구(.tableEmpty/.urgentStatusMessage) 아래에 이어 붙여 중앙
+   정렬한다. */
+.stateActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 /* 페이지네이션 footer(F1-6B). tableWrapper와 형제 요소로, table/tbody
    안에는 넣지 않는다. 결과 범위(왼쪽)와 이동 영역(오른쪽)을 큰 화면에서는
    한 행에, 좁은 화면에서는 wrap해 배치한다. */
@@ -489,6 +508,28 @@
 .modalNumberInput:focus-visible {
   outline: 2px solid var(--dashboard-color-brand-primary);
   outline-offset: 2px;
+}
+
+/* 추가 수량 입력 유효성 안내 문구. 모달 폭을 밀어내지 않도록 필드
+   아래에서 줄바꿈되게 두고 별도 min-width를 두지 않는다. */
+.modalFieldError {
+  margin: 0;
+  color: var(--dashboard-color-status-out-text);
+  font-size: 11px;
+}
+
+/* mutation 실패 문구. adjustPreview와 같은 간격 규칙(modalFields의
+   gap)을 그대로 따르므로 자체 margin은 두지 않는다. */
+.modalSubmitError {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid
+    color-mix(in srgb, var(--dashboard-color-status-out-text) 35%, transparent);
+  border-radius: 9px;
+  background: var(--dashboard-color-status-out-background);
+  color: var(--dashboard-color-status-out-text);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .adjustPreview {

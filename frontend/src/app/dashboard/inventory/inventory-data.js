@@ -1,30 +1,59 @@
 // Dashboard 재고 관리(S-11) 화면이 쓸 순수 데이터 파생 로직.
 //
-// React/브라우저 API에 의존하지 않는다. 입력·출력 item은 F1-2 Mock(및 이후
-// 실제 GET /api/inventory 응답)과 동일한 snake_case 구조(product_id,
-// product_name, product_type, category, produced_qty, sold_qty,
-// remaining_qty, remaining_pct, stock_baseline_pct, stock_status,
-// updated_at)를 그대로 사용하며, camelCase로 복제·변환하지 않는다.
+// React/브라우저 API에 의존하지 않는다. 입력·출력 item은 실제 GET
+// /api/inventory 응답과 동일한 snake_case 구조(product_id, product_name,
+// product_type, category, image_url, produced_qty, sold_qty, remaining_qty,
+// remaining_pct, stock_baseline_pct, stock_status, updated_at)를 그대로
+// 사용하며, camelCase로 복제·변환하지 않는다. 실제 요청·Zod 검증은
+// api/inventory-api.js가 담당한다.
 //
-// F1-3R부터는 "화면이 전체 배열을 받아 직접 필터링/slice"하는 구조를 버리고,
-// 실제 백엔드 GET /api/inventory와 같은 모양의 계약으로 정리했다. 이 파일이
-// 제공하는 세 역할은 다음과 같다.
+// 이 파일이 제공하는 역할은 다음과 같다.
 //
-//   1) buildInventoryApiQuery   — 화면 조회 상태 → 실제 API 요청 파라미터
-//   2) queryMockInventoryList   — (API 연결 전 임시) Mock 데이터를 실제
-//                                  GET /api/inventory처럼 조회한 응답
-//   3) mapInventoryResponseToPageInfo — InventoryListResponse 형태의 응답
-//                                  → 화면 표시용 페이지 메타 정보
-//
-// F1-4 Client Component는 queryMockInventoryList가 돌려주는
-// InventoryListResponse 형태(items/total/limit/offset/updated_at)만 쓰고,
-// 전체 Mock 배열을 직접 필터링하거나 slice하지 않는다. 실제 API 연결 시
-// queryMockInventoryList 호출을 fetch(`/api/inventory?...`) 호출로 그대로
-// 바꿔치기할 수 있어야 한다는 게 이 구조의 목적이다.
-import {
-  INVENTORY_MOCK_RESPONSE,
-  INVENTORY_PAGE_SIZE,
-} from './inventory-mock-data';
+//   1) buildInventoryApiQuery   — 화면 조회 상태 → 실제 GET /api/inventory
+//                                  요청 파라미터(status/product_type/
+//                                  category/q/limit/offset)
+//   2) mapInventoryResponseToPageInfo — InventoryListResponse → 화면
+//                                  표시용 페이지 메타 정보
+//   3) mapInventoryResponsesToUrgentRestockBread — 긴급 보충(OUT+LOW)
+//                                  두 응답 → "지금 채워야 할 빵" view model
+//   4) INVENTORY_PAGE_SIZE/PRODUCT_TYPE_FILTER_OPTIONS/
+//      STOCK_STATUS_FILTER_OPTIONS/CATEGORY_FILTER_OPTIONS — 필터 UI 상수
+
+// Inventory 표의 페이지당 노출 개수(UI 정책) = 실제 API 요청의 limit
+// 값이기도 하다. inventory-mock-data.js에 동일한 이름의 export가 남아
+// 있지만, production runtime은 이제 이 파일의 정의만 쓴다.
+export const INVENTORY_PAGE_SIZE = 12;
+
+// 상품 구분 필터 선택 항목. 'ALL'은 화면 필터 전용 값이며 실제 API의
+// product_type 값으로는 쓰지 않는다(API가 지원하는 값은 BREAD/DRINK뿐).
+export const PRODUCT_TYPE_FILTER_OPTIONS = [
+  { value: 'ALL', label: '전체' },
+  { value: 'BREAD', label: '빵' },
+  { value: 'DRINK', label: '음료' },
+];
+
+// 재고 상태 필터 선택 항목. GET /api/inventory의 status 쿼리는 ALL|LOW|OUT만
+// 허용하고(OK 단독 필터 없음) 그대로 맞췄다.
+export const STOCK_STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: '전체' },
+  { value: 'LOW', label: '재고 부족' },
+  { value: 'OUT', label: '매진' },
+];
+
+// 세부 카테고리 필터 선택 항목. 'ALL'은 화면 필터 전용이며 실제 API의
+// category 값으로는 쓰지 않는다.
+export const CATEGORY_FILTER_OPTIONS = [
+  { value: 'ALL', label: '전체 카테고리' },
+  { value: '식빵', label: '식빵' },
+  { value: '건강빵', label: '건강빵' },
+  { value: '간식빵', label: '간식빵' },
+  { value: '파이/페이스트리', label: '파이/페이스트리' },
+  { value: '도넛/고로케', label: '도넛/고로케' },
+  { value: '커피', label: '커피' },
+  { value: '티', label: '티' },
+  { value: '에이드/주스', label: '에이드/주스' },
+  { value: '우유/기타', label: '우유/기타' },
+];
 
 // 화면 조회 상태의 기본값. 의미는 F1-3과 동일하다 — 상품 유형/재고 상태/
 // 카테고리는 전체, 검색어는 빈 문자열, 1페이지부터 시작. F1-4가 실수로 이
@@ -40,8 +69,7 @@ export const DEFAULT_INVENTORY_QUERY = Object.freeze({
 });
 
 // page 값을 1 이상의 정수로 보정한다. 숫자가 아니거나(NaN) 1보다 작으면
-// 1로 취급한다 — buildInventoryApiQuery와 queryMockInventoryList가 동일한
-// 보정 규칙을 공유하기 위한 내부 helper라 export하지 않는다.
+// 1로 취급한다 — buildInventoryApiQuery의 내부 helper라 export하지 않는다.
 function resolveQueryPage(page) {
   const numericPage = Number(page);
   return Number.isFinite(numericPage)
@@ -69,85 +97,22 @@ export function buildInventoryApiQuery(queryState = DEFAULT_INVENTORY_QUERY) {
     apiQuery.product_type = resolved.productType;
   }
 
+  // category도 실제 API가 지원하는 정식 쿼리 파라미터다(2/4 계약 확인
+  // 완료). ALL은 화면 필터 전용 값이라 그때만 생략한다.
+  if (resolved.category !== 'ALL') {
+    apiQuery.category = resolved.category;
+  }
+
   const trimmedQuery = (resolved.query ?? '').trim();
   if (trimmedQuery) {
     apiQuery.q = trimmedQuery;
   }
 
-  // category는 실제 GET /api/inventory가 지원하지 않는 파라미터라 절대
-  // 포함하지 않는다 — Mock 전용 조건은 queryMockInventoryList 쪽 주석 참고.
   return apiQuery;
 }
 
-// API 연결 전 임시: F1-2 Mock 데이터를 실제 GET /api/inventory처럼 조회하는
-// 순수 함수. 처리 순서는 상품 유형 → 재고 상태 → 상품명 검색 → 카테고리
-// (Mock 전용) 필터 → total 계산 → offset/limit 페이지 추출이며, 반환 형태는
-// InventoryListResponse(items/total/limit/offset/updated_at)와 동일하다.
-// 필터를 통과한 전체 배열(filteredItems)은 반환하지 않는다 — 화면은 이
-// 함수가 돌려준 페이지 하나만 봐야 한다.
-//
-// [category 임시 정책]
-// 실제 GET /api/inventory는 category 파라미터를 지원하지 않지만,
-// dashboard_mock.html의 카테고리 필터 UI/상호작용을 API 연동 전에 검증할
-// 수 있도록 이 Mock 조회 함수에서만 category 조건을 지원한다.
-// - category는 buildInventoryApiQuery의 실제 API 쿼리에는 절대 포함되지
-//   않는, 이 Mock 조회 전용 조건이다.
-// - 반드시 total을 계산하기 *전에* 적용해야 한다. 현재 페이지 items(응답의
-//   items)에만 나중에 category 필터를 걸면 total·totalPages가 실제로
-//   맞는 개수와 어긋난다.
-// - 실제 API 연동 전까지 "백엔드에 category 필터를 추가할지" 또는
-//   "카테고리 필터 UI 정책 자체를 재검토할지" 결정이 필요하다.
-export function queryMockInventoryList(queryState = DEFAULT_INVENTORY_QUERY) {
-  const resolved = { ...DEFAULT_INVENTORY_QUERY, ...queryState };
-  const normalizedQuery = (resolved.query ?? '').trim().toLowerCase();
-
-  // INVENTORY_MOCK_RESPONSE.items는 이미 API와 동일한 정렬(OUT → LOW → OK,
-  // 동일 상태에서는 remaining_qty 오름차순, 그 다음 product_id 오름차순)이
-  // 적용돼 있다. 배열 filter는 살아남은 요소의 상대 순서를 바꾸지 않으므로
-  // 여기서 다시 정렬할 필요가 없다.
-  const filtered = INVENTORY_MOCK_RESPONSE.items.filter((item) => {
-    if (
-      resolved.productType !== 'ALL' &&
-      item.product_type !== resolved.productType
-    ) {
-      return false;
-    }
-    if (
-      resolved.stockStatus !== 'ALL' &&
-      item.stock_status !== resolved.stockStatus
-    ) {
-      return false;
-    }
-    if (
-      normalizedQuery &&
-      !item.product_name.toLowerCase().includes(normalizedQuery)
-    ) {
-      return false;
-    }
-    // Mock 전용 카테고리 조건 — 위 [category 임시 정책] 참고.
-    if (resolved.category !== 'ALL' && item.category !== resolved.category) {
-      return false;
-    }
-    return true;
-  });
-
-  const total = filtered.length;
-  const limit = INVENTORY_PAGE_SIZE;
-  const page = resolveQueryPage(resolved.page);
-  const offset = (page - 1) * limit;
-  const items = filtered.slice(offset, offset + limit);
-
-  return {
-    items,
-    total,
-    limit,
-    offset,
-    updated_at: INVENTORY_MOCK_RESPONSE.updated_at,
-  };
-}
-
-// InventoryListResponse 형태의 응답(queryMockInventoryList의 반환값, 또는
-// 이후 실제 fetch 응답)을 화면 표시용 페이지 메타 정보로 변환한다.
+// InventoryListResponse 형태의 실제 API 응답을 화면 표시용 페이지 메타
+// 정보로 변환한다.
 // response.items를 그대로 쓸 뿐 다시 slice하지 않는다 — 페이지 분할은 이미
 // 조회 단계(Mock 또는 실제 API)에서 끝난 일이라는 전제다.
 export function mapInventoryResponseToPageInfo(response) {
@@ -200,49 +165,45 @@ export function mapInventoryResponseToPageInfo(response) {
   };
 }
 
-// "지금 채워야 할 빵" 영역용 긴급 보충 대상 계산. BREAD이면서 LOW/OUT인
-// item만 대상으로 하고(음료는 재고 표에는 나오지만 이 영역에는 포함하지
-// 않는다), OUT → LOW → remaining_qty 오름차순 → product_id 오름차순으로
-// 정렬한 뒤 상위 limit개만 노출용으로 잘라낸다. 입력 배열은 mutate하지
-// 않는다.
+function toNonNegativeInt(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+// "지금 채워야 할 빵" 영역용 긴급 보충 view model. 재고 표 조회와 완전히
+// 분리된 두 실제 요청(product_type=BREAD, status=OUT / status=LOW, 각각
+// limit=5&offset=0)의 응답을 조합할 뿐, 직접 필터링·정렬하지 않는다 —
+// 두 응답 모두 이미 서버가 remaining_qty 오름차순으로 내려주므로 이
+// 함수에서 다시 정렬하지 않는다. 재고 표의 현재 페이지 items(페이지네이션
+// 결과)는 이 함수에 넘기지 않는다 — 매장 전체 기준이 아니게 되어 전체
+// 긴급 보충 수를 알 수 없기 때문이다.
 //
-// [데이터 계약 — 반드시 지킬 것]
-// 1. 이 함수에 queryMockInventoryList가 반환한 "현재 페이지" items만 넘기면
-//    페이지에 없는 LOW/OUT 빵이 누락되어 전체 긴급 보충 수를 알 수 없다.
-// 2. 반드시 별도로 조회된 BREAD 재고 전체 데이터, 또는 Mock 전체 데이터
-//    (예: INVENTORY_MOCK_RESPONSE.items)에 대해 호출해야 한다.
-// 3. F1-4는 재고 표의 response.items(페이지네이션된 결과)를 이 함수에 그대로
-//    넘기지 않는다.
-// 4. 실제 API 연결 시에도 긴급 보충 영역은 재고 표 조회와 별개의 조회
-//    전략(예: 상태 필터만 걸고 limit을 크게 잡아 한 번에 받아오는 방식 등)이
-//    필요하다 — 이번 단계에서는 그 전략을 구현하지 않는다.
-export function getUrgentRestockBread(items, limit = 5) {
+// total은 outResponse.total + lowResponse.total(각 요청이 limit과 무관하게
+// 돌려주는 정확한 전체 개수)이다. items는 OUT을 먼저 채우고 남는 자리만
+// LOW로 채워 최대 limit개까지 노출한다. 입력 응답 객체·배열은 mutate하지
+// 않는다. 응답이 비정상(total 누락 등)이어도 음수 total/remainingCount를
+// 만들지 않도록 방어한다.
+export function mapInventoryResponsesToUrgentRestockBread(
+  outResponse,
+  lowResponse,
+  limit = 5
+) {
   const numericLimit = Number(limit);
   const safeLimit =
     Number.isFinite(numericLimit) && numericLimit > 0
       ? Math.trunc(numericLimit)
       : 5;
 
-  const statusPriority = { OUT: 0, LOW: 1 };
-  const candidates = items.filter(
-    (item) =>
-      item.product_type === 'BREAD' &&
-      (item.stock_status === 'LOW' || item.stock_status === 'OUT')
-  );
+  const outItems = Array.isArray(outResponse?.items) ? outResponse.items : [];
+  const lowItems = Array.isArray(lowResponse?.items) ? lowResponse.items : [];
+  const outTotal = toNonNegativeInt(outResponse?.total);
+  const lowTotal = toNonNegativeInt(lowResponse?.total);
 
-  const sorted = [...candidates].sort(
-    (a, b) =>
-      statusPriority[a.stock_status] - statusPriority[b.stock_status] ||
-      a.remaining_qty - b.remaining_qty ||
-      a.product_id - b.product_id
-  );
-
-  const total = sorted.length;
-  const visibleItems = sorted.slice(0, safeLimit);
+  const visibleItems = [...outItems, ...lowItems].slice(0, safeLimit);
+  const total = outTotal + lowTotal;
 
   return {
     items: visibleItems,
     total,
-    remainingCount: total - visibleItems.length,
+    remainingCount: Math.max(0, total - visibleItems.length),
   };
 }
