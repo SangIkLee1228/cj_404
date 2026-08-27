@@ -2,12 +2,15 @@ import styles from '../../pos.module.css';
 import ProductCard from './ProductCard';
 
 /** 실제 카탈로그 응답 순서(product_type, category, product_name)를 그대로 쓰고,
- * 카테고리 칩은 그 목록에 실제로 등장하는 카테고리만 등장 순서대로 뽑아 만든다. */
+ * 카테고리 칩은 그 목록에 실제로 등장하는 카테고리만 등장 순서대로 뽑아 만든다.
+ * "기타" 탭은 POS 화면에서 노출하지 않는다 — category가 없는 상품(예: null)이
+ * 있어도 탭에는 올리지 않는다. 해당 상품 자체는 "전체" 탭에서는 그대로 보인다,
+ * 탭으로 골라 볼 수만 없을 뿐이다. */
 function buildCategories(items) {
   const seen = new Set();
   const list = ['전체'];
   items.forEach((p) => {
-    if (p.category && !seen.has(p.category)) {
+    if (p.category && p.category !== '기타' && !seen.has(p.category)) {
       seen.add(p.category);
       list.push(p.category);
     }
