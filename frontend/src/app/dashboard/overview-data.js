@@ -1,45 +1,49 @@
 // Dashboard 운영 현황(홈, OV-1) 화면이 쓸 순수 데이터 파생 로직.
 //
 // React/브라우저 API에 의존하지 않는다. 이 화면의 주 계약은 실제
-// GET /api/dashboard/overview다 — 아직 fetch는 구현하지 않고,
-// overview-mock-data.js의 Mock으로 같은 shape을 흉내낸다.
+// GET /api/dashboard/overview이며, 실제 요청·Zod 검증은
+// api/overview-api.js가 담당한다 — 이 파일은 그 응답을 화면 view model로
+// 변환하는 순수 매핑만 담당한다.
 //
-// 실제 API 응답(kpi/sales_chart/top_products/recent_orders/low_stock/
-// updated_at)과, 화면 전용 provisional 비교값(*_change_pct)을 함수
-// 단위로도 명확히 분리해서 다룬다 — 둘을 한 함수·한 객체에 섞지 않는다.
+// KPI 증감률(sales_change_pct 등)과 sales_chart.points[].order_count는
+// 더 이상 화면 전용 provisional 값이 아니다 — 실제 API 응답(kpi,
+// sales_chart)에 이미 포함되어 내려온다. 이 파일의 매핑 함수는 그 값을
+// 그대로 쓸 뿐 재계산하지 않는다.
 //
 // 이 파일이 제공하는 역할은 다음과 같다.
 //
 //   1) buildDashboardOverviewApiQuery — 화면 조회 상태 → 실제
 //                                        GET /api/dashboard/overview
 //                                        요청 파라미터
-//   2) queryMockDashboardOverview     — (API 연결 전 임시) 실제 응답과
-//                                        동일한 shape의 Mock 조회
-//   3) getMockOverviewKpiComparison   — (API 연결 전 임시, provisional)
-//                                        KPI 증감률 Mock 조회
-//   4) mapDashboardOverviewToKpiCards — 응답 + provisional 비교값 →
-//                                        화면 표시용 KPI 카드 view model
-//   5) getOverviewPeriodLabel         — 기간 값 → 화면 표시용 라벨
-//   6) formatOverviewDateTime         — timezone 기준 시각 포맷
-//   7) formatWon                      — 금액 포맷
-//   8) getMockOverviewOrderCountSeries   — (API 연결 전 임시, provisional)
-//                                        결제 건수 시계열 Mock 조회
-//   9) mapDashboardOverviewToSalesChart  — 응답 + provisional 결제 건수
-//                                        시계열 → 매출/결제 건수 Mixed
-//                                        Chart view model
-//   10) mapDashboardOverviewToTopProductsChart — 응답 → 판매 상위 품목
-//                                        Doughnut Chart view model
-//   11) formatOverviewTimeLabel       — timezone 기준 "HH:MM" 시각 포맷
+//   2) OVERVIEW_PERIOD_FILTER_OPTIONS — 조회 기간 필터(SegmentedControl)
+//                                        선택 항목
+//   3) mapDashboardOverviewToKpiCards — 응답(kpi) → 화면 표시용 KPI 카드
+//                                        view model
+//   4) getOverviewPeriodLabel         — 기간 값 → 화면 표시용 라벨
+//   5) formatOverviewDateTime         — timezone 기준 시각 포맷
+//   6) formatWon                      — 금액 포맷
+//   7) mapDashboardOverviewToSalesChart  — 응답(sales_chart) → 매출/결제
+//                                        건수 Mixed Chart view model
+//   8) mapDashboardOverviewToTopProductsChart — 응답(top_products/
+//                                        top_products_others) → 판매
+//                                        상위 품목 Doughnut Chart view
+//                                        model
+//   9) formatOverviewTimeLabel       — timezone 기준 "HH:MM" 시각 포맷
 //                                        (최근 판매 "시간" 열 전용)
-//   12) mapDashboardOverviewToRecentOrders — 응답 → 최근 판매 표 view
+//   10) mapDashboardOverviewToRecentOrders — 응답 → 최근 판매 표 view
 //                                        model(최대 6건, API 순서 유지)
-import {
-  OVERVIEW_MOCK_RESPONSES,
-  OVERVIEW_MOCK_KPI_COMPARISONS,
-  OVERVIEW_MOCK_ORDER_COUNT_SERIES,
-} from './overview-mock-data';
 
 const VALID_PERIODS = ['TODAY', '7D', '30D'];
+
+// 조회 기간 필터 선택 항목(SegmentedControl용). overview-mock-data.js에
+// 동일한 이름의 export가 남아 있지만, production runtime은 이제 이
+// 파일의 정의만 쓴다(overview-mock-data.js는 그대로 두되 더 이상
+// import하지 않는다).
+export const OVERVIEW_PERIOD_FILTER_OPTIONS = [
+  { value: 'TODAY', label: '오늘' },
+  { value: '7D', label: '1주일' },
+  { value: '30D', label: '1개월' },
+];
 
 // 화면 조회 상태의 기본값. 화면이 실수로 이 객체를 직접 mutate해 다른 화면
 // 상태와 뒤섞이는 일이 없도록 freeze한다.
@@ -48,8 +52,8 @@ export const DEFAULT_OVERVIEW_QUERY = Object.freeze({
 });
 
 // 유효하지 않은 period 값을 TODAY로 보정한다 — buildDashboardOverviewApiQuery
-// /queryMockDashboardOverview/getMockOverviewKpiComparison이 동일한 보정
-// 규칙을 공유하기 위한 내부 helper라 export하지 않는다.
+// /getOverviewPeriodLabel이 동일한 보정 규칙을 공유하기 위한 내부
+// helper라 export하지 않는다.
 function resolvePeriod(period) {
   return VALID_PERIODS.includes(period) ? period : 'TODAY';
 }
@@ -63,25 +67,6 @@ export function buildDashboardOverviewApiQuery(
 ) {
   const resolved = { ...DEFAULT_OVERVIEW_QUERY, ...queryState };
   return { period: resolvePeriod(resolved.period) };
-}
-
-// API 연결 전 임시: 실제 GET /api/dashboard/overview 응답과 동일한
-// shape의 Mock을 기간별로 조회한다. fixture를 그대로 반환할 뿐 mutate하지
-// 않는다(호출부도 이 반환값을 mutate해서는 안 된다).
-export function queryMockDashboardOverview(
-  queryState = DEFAULT_OVERVIEW_QUERY
-) {
-  const resolved = { ...DEFAULT_OVERVIEW_QUERY, ...queryState };
-  const period = resolvePeriod(resolved.period);
-  return OVERVIEW_MOCK_RESPONSES[period];
-}
-
-// API 연결 전 임시, PROVISIONAL: 실제 API에는 없는 KPI 증감률 비교값만
-// 조회한다. 실제 응답(queryMockDashboardOverview)과는 완전히 별개의
-// 함수·데이터 소스다 — 절대 한 객체로 합쳐 반환하지 않는다.
-export function getMockOverviewKpiComparison(period) {
-  const resolvedPeriod = resolvePeriod(period);
-  return OVERVIEW_MOCK_KPI_COMPARISONS[resolvedPeriod];
 }
 
 // 기간 값을 화면 표시용 라벨로 매핑만 한다(새 업무 규칙 없음).
@@ -141,15 +126,14 @@ function resolveTrend(changePct) {
   return 'FLAT';
 }
 
-// 응답(kpi)과 provisional 비교값(comparison)을 합쳐 KPI 카드 3개의 view
-// model을 만든다. 두 소스를 여기서만 결합하고, 그 결과(각 카드 객체)
-// 안에서도 실제 값(value/rawValue)과 provisional 값(changePct/trend)의
-// 출처가 뒤섞이지 않도록 필드를 분리해 둔다.
+// 응답(kpi)만으로 KPI 카드 3개의 view model을 만든다.
+// sales_change_pct/order_change_pct/item_change_pct는 실제 API가 이미
+// 계산해 내려주는 값이라 여기서 재계산하지 않고 그대로 쓴다.
 //
-// comparison이 없거나 changePct가 유한수가 아니면(Number.isFinite 기준)
+// changePct가 유한수가 아니면(Number.isFinite 기준, 비정상 응답 방어)
 // changePct/trend를 null로 두어 화면이 안전하게 중립 문구로 대체할 수
 // 있게 한다 — 렌더링 오류를 만들지 않는다.
-export function mapDashboardOverviewToKpiCards(response, comparison) {
+export function mapDashboardOverviewToKpiCards(response) {
   const kpi = response.kpi;
   const periodLabel = getOverviewPeriodLabel(response.period);
 
@@ -157,9 +141,9 @@ export function mapDashboardOverviewToKpiCards(response, comparison) {
     return Number.isFinite(rawChangePct) ? rawChangePct : null;
   }
 
-  const salesChangePct = resolveChangePct(comparison?.sales_change_pct);
-  const orderChangePct = resolveChangePct(comparison?.order_change_pct);
-  const itemQtyChangePct = resolveChangePct(comparison?.item_qty_change_pct);
+  const salesChangePct = resolveChangePct(kpi?.sales_change_pct);
+  const orderChangePct = resolveChangePct(kpi?.order_change_pct);
+  const itemQtyChangePct = resolveChangePct(kpi?.item_change_pct);
 
   return [
     {
@@ -189,43 +173,23 @@ export function mapDashboardOverviewToKpiCards(response, comparison) {
   ];
 }
 
-// API 연결 전 임시, PROVISIONAL: 실제 API에는 없는 시간대별/일별 결제
-// 건수 시계열만 조회한다. 실제 응답(queryMockDashboardOverview)과는
-// 완전히 별개의 함수·데이터 소스이며, 절대 한 객체로 합쳐 반환하지
-// 않는다 — 결합은 mapDashboardOverviewToSalesChart에서만 한다.
-export function getMockOverviewOrderCountSeries(period) {
-  const resolvedPeriod = resolvePeriod(period);
-  return OVERVIEW_MOCK_ORDER_COUNT_SERIES[resolvedPeriod];
-}
-
-// 실제 응답(response.sales_chart)과 provisional 결제 건수 시계열
-// (orderCountSeries)을 합쳐 Mixed Chart(매출 막대 + 결제 건수 선) view
-// model을 만든다. label이 위치별로 정확히 일치하는 항목만 결합하고,
-// provisional 시계열이 없거나 길이/label이 어긋나면 orderCounts를 빈
-// 배열로, hasOrderCountSeries를 false로 돌려준다 — 화면은 이 플래그만
-// 보고 매출 막대만 안전하게 그릴 수 있다(렌더링 오류 없음). 컴포넌트가
-// 두 시계열을 다시 join할 필요가 없도록 이 함수가 대신 결합해 둔다.
-export function mapDashboardOverviewToSalesChart(response, orderCountSeries) {
+// 실제 응답(response.sales_chart)만으로 Mixed Chart(매출 막대 + 결제
+// 건수 선) view model을 만든다. points[].order_count는 실제 API가 이미
+// 함께 내려주는 값이라(서버 기본값 0) 더 이상 별도 시계열을 join하지
+// 않는다. points가 있으면(labels.length > 0) 항상 결제 건수 선도 함께
+// 그릴 수 있다.
+export function mapDashboardOverviewToSalesChart(response) {
   const points = response.sales_chart.points;
   const labels = points.map((point) => point.label);
   const amounts = points.map((point) => point.amount);
-
-  const orderCountByLabel = new Map(
-    (orderCountSeries ?? []).map((point) => [point.label, point.order_count])
-  );
-  const alignedOrderCounts = labels.map((label) =>
-    orderCountByLabel.get(label)
-  );
-  const hasOrderCountSeries =
-    Array.isArray(orderCountSeries) &&
-    orderCountSeries.length === labels.length &&
-    alignedOrderCounts.every((value) => Number.isInteger(value));
+  const orderCounts = points.map((point) => point.order_count);
+  const hasOrderCountSeries = points.length > 0;
 
   return {
     unit: response.sales_chart.unit,
     labels,
     amounts,
-    orderCounts: hasOrderCountSeries ? alignedOrderCounts : [],
+    orderCounts,
     hasOrderCountSeries,
   };
 }
@@ -238,69 +202,49 @@ function toFiniteNonNegative(value) {
 }
 
 // response.top_products(이미 sold_qty 내림차순으로 정렬된 상태)에서 상위
-// 5개만 쓰고, 그 뒤에 "기타"(기간 전체 수량 중 상위 5개를 뺀 나머지)를
-// 더해 Doughnut Chart view model로 변환한다. 순서는 다시 정렬하지 않고
-// API가 준 순서 그대로 쓴다.
+// 5개만 쓰고, response.top_products_others로 "기타" 조각을 더해 Doughnut
+// Chart view model로 변환한다. 순서는 다시 정렬하지 않고 API가 준 순서
+// 그대로 쓴다. share_pct(각 상품·기타 비중)는 실제 API가 이미 계산해
+// 내려주는 값이라 프론트에서 재계산하지 않고 그대로 쓴다.
 //
-// overallTotal은 top_products 합계가 아니라 response.kpi.item_qty(기간
-// 전체 판매 수량)를 기준으로 삼는다 — 그래야 "기타"가 실제 의미를 갖고,
-// 도넛 중앙·범례 비율의 분모도 항상 기간 전체 수량이 된다. 다만
-// kpi.item_qty가 없거나 숫자가 아니거나(비정상 응답) 상위 5개 합계보다
-// 작은 비정상 상황(topProductsTotal > overallTotal)에서는 음수 "기타"를
-// 만들지 않도록 overallTotal을 topProductsTotal 아래로 내려가지 않게
-// 방어한다 — 정상 응답이라면 kpi.item_qty >= topProductsTotal이 항상
-// 성립하므로 이 방어는 정상 데이터의 실제 값을 바꾸지 않는다.
+// 도넛 중앙에 표시하는 total은 top_products 합계가 아니라
+// response.kpi.item_qty(기간 전체 판매 수량)를 그대로 쓴다 —
+// top_products_others.sold_qty는 이미 그 차이(기타 수량)만 담고 있으므로
+// 여기서 다시 합산하지 않는다.
+//
+// top_products가 비어 있으면(TODAY처럼 판매 데이터가 없는 정상적인 빈
+// 결과) top_products_others도 항상 0(백엔드가 같은 스냅샷 기준으로 함께
+// 비운다)이므로, 이 경우 화면은 기존 빈 상태를 그대로 유지한다 —
+// top_products_others만으로 "기타" 100%짜리 가짜 상품 데이터를 만들어
+// 채우지 않는다.
 export function mapDashboardOverviewToTopProductsChart(response) {
   const topProducts = Array.isArray(response?.top_products)
     ? response.top_products
     : [];
 
-  // top_products가 아예 비어 있으면(정상적인 빈 결과든, kpi.item_qty만
-  // 있고 top_products가 없는 비정상 응답이든) 화면은 항상 기존 빈 상태를
-  // 유지해야 한다 — kpi.item_qty만으로 "기타" 100%짜리 가짜 상품 데이터를
-  // 만들어 채우지 않는다. items가 비어 있으면 컴포넌트가 빈 상태 UI를
-  // 그대로 그린다.
   if (topProducts.length === 0) {
     return { labels: [], values: [], total: 0, items: [] };
   }
 
   const topFive = topProducts.slice(0, MAX_TOP_PRODUCTS);
+  const others = response?.top_products_others;
 
-  const topProductsTotal = topFive.reduce(
-    (sum, item) => sum + toFiniteNonNegative(item?.sold_qty),
-    0
-  );
+  const items = topFive.map((item, index) => ({
+    productId: item?.product_id ?? null,
+    label: item?.product_name ?? '',
+    quantity: toFiniteNonNegative(item?.sold_qty),
+    ratio: toFiniteNonNegative(item?.share_pct),
+    colorIndex: index,
+    isOther: false,
+  }));
 
-  const overallTotal = Math.max(
-    toFiniteNonNegative(response?.kpi?.item_qty),
-    topProductsTotal
-  );
-  const otherQty = Math.max(0, overallTotal - topProductsTotal);
-
-  function computeRatio(quantity) {
-    return overallTotal > 0
-      ? Math.round((quantity / overallTotal) * 1000) / 10
-      : 0;
-  }
-
-  const items = topFive.map((item, index) => {
-    const quantity = toFiniteNonNegative(item?.sold_qty);
-    return {
-      productId: item?.product_id ?? null,
-      label: item?.product_name ?? '',
-      quantity,
-      ratio: computeRatio(quantity),
-      colorIndex: index,
-      isOther: false,
-    };
-  });
-
+  const otherQty = toFiniteNonNegative(others?.sold_qty);
   if (otherQty > 0) {
     items.push({
       productId: null,
       label: OTHER_ITEM_LABEL,
       quantity: otherQty,
-      ratio: computeRatio(otherQty),
+      ratio: toFiniteNonNegative(others?.share_pct),
       colorIndex: items.length,
       isOther: true,
     });
@@ -309,7 +253,7 @@ export function mapDashboardOverviewToTopProductsChart(response) {
   return {
     labels: items.map((item) => item.label),
     values: items.map((item) => item.quantity),
-    total: overallTotal,
+    total: toFiniteNonNegative(response?.kpi?.item_qty),
     items,
   };
 }
@@ -340,8 +284,8 @@ const MAX_RECENT_ORDERS = 6;
 // 변환한다. 최대 6건까지만 쓰고, API가 준 순서를 다시 정렬하지 않는다 —
 // 최대 개수 제한은 이 함수가 담당하므로 화면에서 다시 slice/sort하지
 // 않아도 된다. response.timezone이 없거나 문자열이 아니면(비정상 응답)
-// 브라우저 로컬 timezone에 기대는 대신 이 Mock 전체가 쓰는 기준
-// timezone('Asia/Seoul')으로 안전하게 대체한다. 원본 response/
+// 브라우저 로컬 timezone에 기대는 대신 API 기본 timezone
+// ('Asia/Seoul')으로 안전하게 대체한다. 원본 response/
 // recent_orders 배열과 각 item은 mutate하지 않고, 화면 전용 필드를 원본
 // 객체에 다시 기록하지도 않는다(map으로 새 객체만 만든다).
 export function mapDashboardOverviewToRecentOrders(response) {
