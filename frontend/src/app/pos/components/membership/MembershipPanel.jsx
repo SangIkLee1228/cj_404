@@ -1,5 +1,4 @@
 import styles from '../../pos.module.css';
-import { maskMemberName } from '../../helpers/formatters';
 
 export default function MembershipPanel({
   cartEmpty,
@@ -16,7 +15,7 @@ export default function MembershipPanel({
         className={`${styles.statusStrip} ${memberConfirmed ? styles.show : ''}`}
       >
         <span>
-          회원 확인 · {maskMemberName(memberName)} · 적립 예정 {points}P
+          회원 확인 · {memberName} · 적립 예정 {points}P
         </span>
         <span>×</span>
       </div>

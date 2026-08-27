@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import styles from '../../pos.module.css';
 import PhoneKeypad from '../membership/PhoneKeypad';
-import { formatWon, maskMemberName } from '../../helpers/formatters';
+import { formatWon } from '../../helpers/formatters';
 
 const FRAME_WIDTH = 390;
 const FRAME_HEIGHT = 624;
@@ -201,7 +201,7 @@ export default function CustomerFloatingDisplay({ pos }) {
               className={`${styles.customerMemberInfo} ${membership.memberConfirmed ? styles.show : ''}`}
             >
               {membership.memberConfirmed
-                ? `${maskMemberName(memberName)} · ${payment.paid ? `${points}P 적립 완료` : `적립 예정 ${points}P`}`
+                ? `${memberName} · ${payment.paid ? `${points}P 적립 완료` : `적립 예정 ${points}P`}`
                 : ''}
             </div>
           </div>
