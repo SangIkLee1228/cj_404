@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PageHeader from '../components/PageHeader';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SelectControl from '../components/ui/SelectControl';
@@ -13,30 +14,19 @@ import dashboardLayoutStyles from '../dashboard-layout.module.css';
 import styles from './inventory.module.css';
 import {
   DEFAULT_INVENTORY_QUERY,
-  getUrgentRestockBread,
-  queryMockInventoryList,
-  mapInventoryResponseToPageInfo,
-} from './inventory-data';
-import {
   PRODUCT_TYPE_FILTER_OPTIONS,
   STOCK_STATUS_FILTER_OPTIONS,
   CATEGORY_FILTER_OPTIONS,
-  INVENTORY_MOCK_RESPONSE,
-} from './inventory-mock-data';
-
-// F1-4는 조회 상태(queryState)만 관리했다. F1-6A부터는 이 queryState를
-// queryMockInventoryList → mapInventoryResponseToPageInfo로 그대로 이어
-// 현재 페이지 재고 표를 렌더링한다(이전/다음 버튼과 페이지 요약 문구는
-// F1-6B의 몫).
-
-// "지금 채워야 할 빵" 긴급 보충 영역은 상단 필터와 무관하게 매장 전체
-// 기준으로 항상 같은 대상을 보여줘야 한다(inventory-data.js의 데이터 계약
-// 참고: 페이지네이션된 response.items가 아니라 전체 Mock 데이터를 넘겨야
-// 함). 필터 상태(queryState)에 의존하지 않는 정적인 값이라 컴포넌트 state로
-// 두지 않고, import 시점에 한 번만 계산되는 모듈 상수로 둔다.
-const URGENT_RESTOCK_BREAD = getUrgentRestockBread(
-  INVENTORY_MOCK_RESPONSE.items
-);
+  buildInventoryApiQuery,
+  mapInventoryResponseToPageInfo,
+  mapInventoryResponsesToUrgentRestockBread,
+} from './inventory-data';
+import {
+  inventoryQueryKeys,
+  fetchInventoryList,
+  fetchUrgentRestockBread,
+  restockInventoryProduct,
+} from '../api/inventory-api';
 
 // API 응답의 stock_status/product_type 값을 화면 표시용 한글 라벨로
 // 매핑만 하는 상수(새 판정 로직 없음). NoticeCard의 StatusBadge
@@ -45,6 +35,7 @@ const STOCK_STATUS_LABEL = { OK: '정상', LOW: '재고 부족', OUT: '매진' }
 const PRODUCT_TYPE_LABEL = { BREAD: '빵', DRINK: '음료' };
 
 export default function InventoryPageContent() {
+  const queryClient = useQueryClient();
   const [queryState, setQueryState] = useState(DEFAULT_INVENTORY_QUERY);
   // 재고 조정 모달이 다루는 상품 한 건. null이면 모달이 닫힌 상태다 —
   // 별도 open boolean을 두지 않고 이 값 하나로 열림/닫힘을 표현한다.
@@ -56,15 +47,45 @@ export default function InventoryPageContent() {
   // 되돌릴 곳"을 InventoryAdjustmentModal에 명시적으로 넘기기 위함이다.
   const adjustmentTriggerRef = useRef(null);
 
+  // 재고 반영(PATCH) mutation. backend에 idempotency/동시성 방어가 없으므로
+  // isPending 동안 버튼(disabled)과 이 아래 두 handler(open/submit) 양쪽
+  // 모두에서 중복 제출·모달 전환을 막는다. 성공 시에는 응답 일부만으로
+  // cache를 직접 patch하지 않고, Inventory namespace 전체를 invalidate해
+  // 현재 목록과 긴급 보충(OUT/LOW)을 실제 GET으로 다시 조회한다 — 조정된
+  // 상품이 서버 재판정으로 현재 필터/긴급 목록에서 사라지는 것도 정상
+  // 동작으로 그대로 반영한다.
+  const restockMutation = useMutation({
+    mutationFn: ({ productId, qty }) =>
+      restockInventoryProduct({ productId, qty }),
+    onSuccess: () => {
+      setSelectedInventoryItem(null);
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.all });
+    },
+  });
+
   function handleOpenAdjustmentModal(item, event) {
+    // mutation 진행 중에는 다른 상품으로 모달을 전환하지 않는다.
+    if (restockMutation.isPending) {
+      return;
+    }
     adjustmentTriggerRef.current = event.currentTarget;
+    // 새 상품을 열 때 이전 상품의 mutation 실패 상태를 남겨두지 않는다.
+    restockMutation.reset();
     setSelectedInventoryItem(item);
   }
 
   function handleAdjustmentModalOpenChange(nextOpen) {
     if (!nextOpen) {
       setSelectedInventoryItem(null);
+      restockMutation.reset();
     }
+  }
+
+  function handleRestockSubmit({ productId, qty }) {
+    if (restockMutation.isPending) {
+      return;
+    }
+    restockMutation.mutate({ productId, qty });
   }
 
   // 네 필터 모두 규칙이 같다: 값 하나 바꾸고 page를 1로 되돌린다. 상태
@@ -86,11 +107,31 @@ export default function InventoryPageContent() {
     setQueryState((prev) => ({ ...prev, query, page: 1 }));
   }
 
-  // 30개 규모의 Mock 데이터를 매 렌더링마다 다시 조회해도 비용이 미미해
-  // useMemo 없이 단순 계산으로 둔다. 컴포넌트에서 직접 filter/sort/slice를
-  // 구현하지 않고, 두 함수의 반환값만 그대로 화면에 옮긴다.
-  const inventoryResponse = queryMockInventoryList(queryState);
-  const pageInfo = mapInventoryResponseToPageInfo(inventoryResponse);
+  // 재고 표 목록 query. normalizedQuery(=buildInventoryApiQuery 결과)를
+  // queryKey에 그대로 실어 필터·검색·페이지 조합마다 별도로 캐시된다.
+  // Foundation의 retry/refetchOnWindowFocus 기본 정책을 그대로 쓴다.
+  const normalizedQuery = buildInventoryApiQuery(queryState);
+  const inventoryListQuery = useQuery({
+    queryKey: inventoryQueryKeys.list(normalizedQuery),
+    queryFn: ({ signal }) => fetchInventoryList(queryState, { signal }),
+  });
+  const pageInfo = inventoryListQuery.isSuccess
+    ? mapInventoryResponseToPageInfo(inventoryListQuery.data)
+    : null;
+
+  // "지금 채워야 할 빵" 긴급 보충 query. 상단 필터·검색·페이지(queryState)와
+  // 완전히 독립된 별도 queryKey를 쓴다 — 매장 전체 기준으로 항상 같은
+  // 대상을 보여줘야 하므로 재고 표 필터에 영향받지 않는다.
+  const urgentRestockQuery = useQuery({
+    queryKey: inventoryQueryKeys.urgentRestockBread,
+    queryFn: ({ signal }) => fetchUrgentRestockBread({ signal }),
+  });
+  const urgentRestockBread = urgentRestockQuery.isSuccess
+    ? mapInventoryResponsesToUrgentRestockBread(
+        urgentRestockQuery.data.out,
+        urgentRestockQuery.data.low
+      )
+    : null;
 
   // 이전/다음 버튼은 disabled 상태에서 호출되지 않지만, page 값 자체도
   // 1과 totalPages 밖으로 나가지 않도록 한 번 더 방어한다. 필터·검색은
@@ -102,7 +143,7 @@ export default function InventoryPageContent() {
   function handleNextPage() {
     setQueryState((prev) => ({
       ...prev,
-      page: Math.min(pageInfo.totalPages, prev.page + 1),
+      page: Math.min(pageInfo?.totalPages ?? prev.page, prev.page + 1),
     }));
   }
 
@@ -165,22 +206,41 @@ export default function InventoryPageContent() {
       />
       <div className={dashboardLayoutStyles.pageContent}>
         <div className={styles.contentStack}>
-          {URGENT_RESTOCK_BREAD.total > 0 ? (
+          {urgentRestockQuery.isPending ? (
+            <p
+              className={styles.urgentStatusMessage}
+              role="status"
+              aria-live="polite"
+            >
+              긴급 재고를 확인하는 중입니다.
+            </p>
+          ) : urgentRestockQuery.isError ? (
+            <>
+              <p className={styles.urgentStatusMessage} role="alert">
+                긴급 재고를 불러오지 못했습니다.
+              </p>
+              <div className={styles.stateActions}>
+                <Button onClick={() => urgentRestockQuery.refetch()}>
+                  다시 시도
+                </Button>
+              </div>
+            </>
+          ) : urgentRestockBread && urgentRestockBread.total > 0 ? (
             <NoticeCard
               title="지금 채워야 할 빵"
               meta={
                 <>
-                  {`${URGENT_RESTOCK_BREAD.total}개`}
-                  {URGENT_RESTOCK_BREAD.remainingCount > 0 ? (
+                  {`${urgentRestockBread.total}개`}
+                  {urgentRestockBread.remainingCount > 0 ? (
                     <>
                       {' · '}
                       <button
                         type="button"
                         className={styles.restockMore}
                         onClick={handleScrollToInventoryTable}
-                        aria-label={`남은 긴급 재고 ${URGENT_RESTOCK_BREAD.remainingCount}개를 재고 목록에서 보기`}
+                        aria-label={`남은 긴급 재고 ${urgentRestockBread.remainingCount}개를 재고 목록에서 보기`}
                       >
-                        {`외 ${URGENT_RESTOCK_BREAD.remainingCount}개 더보기`}
+                        {`외 ${urgentRestockBread.remainingCount}개 더보기`}
                       </button>
                     </>
                   ) : null}
@@ -188,7 +248,7 @@ export default function InventoryPageContent() {
               }
             >
               <ul className={styles.restockChips}>
-                {URGENT_RESTOCK_BREAD.items.map((item) => (
+                {urgentRestockBread.items.map((item) => (
                   <li key={item.product_id} className={styles.restockChip}>
                     <span className={styles.restockChipName}>
                       {item.product_name}
@@ -202,6 +262,7 @@ export default function InventoryPageContent() {
                     <Button
                       type="button"
                       variant="primary"
+                      disabled={restockMutation.isPending}
                       onClick={(event) =>
                         handleOpenAdjustmentModal(item, event)
                       }
@@ -215,7 +276,22 @@ export default function InventoryPageContent() {
             </NoticeCard>
           ) : null}
           <TableCard id="inventory-table">
-            {pageInfo.total === 0 ? (
+            {inventoryListQuery.isPending ? (
+              <p className={styles.tableEmpty} role="status" aria-live="polite">
+                재고 목록을 불러오는 중입니다.
+              </p>
+            ) : inventoryListQuery.isError ? (
+              <>
+                <p className={styles.tableEmpty} role="alert">
+                  재고 목록을 불러오지 못했습니다.
+                </p>
+                <div className={styles.stateActions}>
+                  <Button onClick={() => inventoryListQuery.refetch()}>
+                    다시 시도
+                  </Button>
+                </div>
+              </>
+            ) : pageInfo.total === 0 ? (
               <p
                 className={styles.tableEmpty}
                 role="status"
@@ -308,6 +384,7 @@ export default function InventoryPageContent() {
                               <Button
                                 type="button"
                                 variant="primary"
+                                disabled={restockMutation.isPending}
                                 onClick={(event) =>
                                   handleOpenAdjustmentModal(item, event)
                                 }
@@ -366,6 +443,9 @@ export default function InventoryPageContent() {
         open={selectedInventoryItem !== null}
         onOpenChange={handleAdjustmentModalOpenChange}
         returnFocusRef={adjustmentTriggerRef}
+        onSubmit={handleRestockSubmit}
+        isSubmitting={restockMutation.isPending}
+        submitError={restockMutation.isError}
       />
     </section>
   );
