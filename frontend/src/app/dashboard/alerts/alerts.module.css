@@ -83,16 +83,24 @@
   border-radius: 10px;
 }
 
-/* STOCK_LOW = Warning 의미. 기존 status-low 토큰을 그대로 재사용한다(새
+/* severity=OUT(매진) = 기존 status-out 토큰을 그대로 재사용한다(새 토큰
+   없음). LOW(재고 부족)와 색으로 구분되어야 매진/매진 임박을 한눈에
+   가른다(dashboard.md 매진 임박·매진 표현 규칙). */
+.alertIconOut {
+  background: var(--dashboard-color-status-out-background);
+  color: var(--dashboard-color-status-out-text);
+}
+
+/* severity=LOW(재고 부족) = 기존 status-low 토큰을 그대로 재사용한다(새
    토큰 없음). */
 .alertIconWarning {
   background: var(--dashboard-color-status-low-background);
   color: var(--dashboard-color-status-low-text);
 }
 
-/* SYSTEM(Info)과 알 수 없는 유형(neutral fallback) 모두 중립 표현을
-   쓴다 — Success/Warning/Out 배지를 억지로 쓰지 않는다는 지침에 따라
-   상태 토큰이 아닌 muted 텍스트/배경 톤만 쓴다. */
+/* severity=INFO(시스템)와 알 수 없는 값(neutral fallback) 모두 중립
+   표현을 쓴다 — Success/Warning/Out 배지를 억지로 쓰지 않는다는 지침에
+   따라 상태 토큰이 아닌 muted 텍스트/배경 톤만 쓴다. */
 .alertIconInfo,
 .alertIconNeutral {
   background: var(--dashboard-color-background);
@@ -179,6 +187,29 @@
   color: var(--dashboard-color-text-muted);
   font-size: 12px;
   text-align: center;
+}
+
+/* 오류 상태의 "다시 시도" 버튼 배치 전용 wrapper. .tableEmpty 문구 아래에
+   이어 붙여 중앙 정렬한다. */
+.stateActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* 개별/전체 읽음 처리 mutation 실패 문구. ProductFormModal의
+   .modalSubmitError와 동일한 status-out 토큰 조합을 재사용한다(새 토큰
+   없음). 목록 GET 오류(.tableEmpty)와 시각적으로 구분되도록 필터 아래·
+   TableCard 위에 별도 배치한다. */
+.mutationError {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid
+    color-mix(in srgb, var(--dashboard-color-status-out-text) 35%, transparent);
+  border-radius: 9px;
+  background: var(--dashboard-color-status-out-background);
+  color: var(--dashboard-color-status-out-text);
+  font-size: 11px;
 }
 
 /* 페이지네이션 footer. 목록 카드 body와 형제 요소로, ul 안에는 넣지
