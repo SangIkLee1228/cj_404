@@ -343,6 +343,37 @@
   margin-top: 12px;
 }
 
+/* "최근 판매" 제목 링크. TableCard의 .title(h2) 안에 렌더링되므로
+   font-size/font-weight/color는 그 h2에서 물려받는다(color: inherit) —
+   여기서 새로 지정하지 않는다. 카드 헤더 높이·정렬에 영향을 주지
+   않도록 inline-flex로만 감싼다. */
+.recentOrdersTitleLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+/* 링크임을 색 변화 + underline 두 가지로 알린다(밑줄 단독 강조가
+   아니라 hover 시 brand color로도 구분되게). */
+.recentOrdersTitleLink:hover {
+  color: var(--dashboard-color-brand-primary);
+  text-decoration: underline;
+}
+
+.recentOrdersTitleLink:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+.recentOrdersTitleIcon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
 /* 목업의 #recentOrders.recent-scroll(max-height:336px; overflow-y:auto)
    의도를 그대로 반영한다 — 최대 6행이 넘칠 정도로 길어지지 않게 카드
    내부에서만 세로 스크롤한다. 좁은 화면에서는 이 wrapper 자체가 가로
