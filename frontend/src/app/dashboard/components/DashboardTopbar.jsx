@@ -11,6 +11,8 @@ import Button from './ui/Button';
 const SYNC_SUCCESS_MESSAGE = '데이터 동기화가 완료되었습니다.';
 const SYNC_ERROR_MESSAGE = '데이터 동기화에 실패했습니다. 다시 시도해주세요.';
 
+const POS_PATH = '/pos';
+
 export default function DashboardTopbar() {
   const pathname = usePathname();
   const currentRoute = getDashboardRoute(pathname);
@@ -50,6 +52,15 @@ export default function DashboardTopbar() {
       // 서버 오류 원문·stack·응답 본문은 노출하지 않는다.
       setSyncStatus('error');
     }
+  }
+
+  // 클릭 handler 안에서 동기적으로 직접 호출한다 — 비동기 처리 뒤에
+  // 호출하면 브라우저가 팝업 차단으로 간주할 수 있다. 현재 서비스
+  // origin 기준 상대 경로만 쓰고, 절대 URL/localhost를 하드코딩하지
+  // 않는다. noopener/noreferrer로 새 탭이 window.opener를 통해 이
+  // Dashboard 탭을 조작하지 못하게 막는다(reverse tabnabbing 방지).
+  function handlePosOpenClick() {
+    window.open(POS_PATH, '_blank', 'noopener,noreferrer');
   }
 
   return (
@@ -98,9 +109,11 @@ export default function DashboardTopbar() {
             </span>
           )
         ) : null}
-        {/* 직원 POS 열기는 아직 실제 동작이 없는 시각적 placeholder다.
-            API 연동 전까지 disabled로 둔다(이번 단계 범위 아님). */}
-        <Button variant="primary" disabled>
+        <Button
+          variant="primary"
+          onClick={handlePosOpenClick}
+          aria-label="직원 POS 새 탭에서 열기"
+        >
           직원 POS 열기 ↗
         </Button>
       </div>
