@@ -1,5 +1,6 @@
 /* Dashboard 전용 레이아웃 스타일이며 POS를 포함한 다른 화면에
    영향을 주지 않도록 이 파일 안에서만 관리한다. */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
 .layout {
   /* position:fixed + inset:0으로 Dashboard Shell 전체를 viewport에 직접
@@ -12,6 +13,19 @@
   inset: 0;
   display: flex;
   overflow: hidden;
+  /* POS(pos.module.css)와 동일한 CDN·fallback 순서를 쓰되, body/globals.css가
+     아니라 이 .layout 자손으로만 스코프한다 — POS 전역 폰트에 영향 없음. */
+  font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
+}
+
+/* 브라우저 기본 폼 컨트롤 스타일(버튼/입력 등)은 font-family를 상속하지
+   않으므로 Dashboard 범위 안에서만 명시적으로 상속시킨다. font shorthand나
+   font-size/font-weight/line-height는 건드리지 않는다. */
+.layout button,
+.layout input,
+.layout select,
+.layout textarea {
+  font-family: inherit;
 }
 
 .sidebar {
@@ -311,6 +325,49 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* 데이터 동기화 버튼의 RefreshCw 아이콘 회전. syncing 상태에서만 적용된다. */
+.topbarSyncIconSpinning {
+  animation: dashboardTopbarSyncSpin 0.9s linear infinite;
+}
+
+@keyframes dashboardTopbarSyncSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbarSyncIconSpinning {
+    animation: none;
+  }
+}
+
+/* 동기화 성공/실패 안내 문구. 버튼 옆 한 줄로 표시하고, 최대 너비를
+   제한해 문구 길이에 따라 topbar 높이(64px)나 옆 버튼 위치가 크게
+   흔들리지 않게 한다(시각적으로만 잘리며, 전체 문구는 role/aria-live로
+   보조기기에 그대로 전달된다). 색상은 기존 status-ok/status-out 토큰만
+   재사용한다 — 새 hex/rgb 없음. */
+.topbarSyncMessage {
+  max-width: 220px;
+  overflow: hidden;
+  flex-shrink: 1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbarSyncMessageSuccess {
+  color: var(--dashboard-color-status-ok-text);
+}
+
+.topbarSyncMessageError {
+  color: var(--dashboard-color-status-out-text);
 }
 
 .contentViewport {

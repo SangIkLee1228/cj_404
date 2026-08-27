@@ -1,4 +1,7 @@
+import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import TableCard from './components/ui/TableCard';
+import { DASHBOARD_ROUTES } from './dashboard-routes';
 import styles from './overview.module.css';
 
 // 최근 판매(OV-3). overview-data.js의 mapDashboardOverviewToRecentOrders가
@@ -7,11 +10,26 @@ import styles from './overview.module.css';
 // 이 컴포넌트에서 정렬·개수 제한·포맷을 다시 계산하지 않는다. 주문
 // 상세·페이지네이션·행 클릭 등 업무 동작은 이번 단계 범위가 아니라
 // 구현하지 않는다.
+//
+// 제목("최근 판매")만 판매 통계 페이지로 가는 링크다 — 카드 전체·표
+// 행·headerMeta는 클릭 대상이 아니다. 하드코딩한 '/dashboard/sales'
+// 대신 DASHBOARD_ROUTES.sales.href를 그대로 재사용한다.
 export default function OverviewRecentOrders({ periodLabel, recentOrders }) {
   return (
     <TableCard
       className={styles.recentOrdersCard}
-      title="최근 판매"
+      title={
+        <Link
+          href={DASHBOARD_ROUTES.sales.href}
+          className={styles.recentOrdersTitleLink}
+        >
+          <span>최근 판매</span>
+          <ArrowUpRight
+            className={styles.recentOrdersTitleIcon}
+            aria-hidden="true"
+          />
+        </Link>
+      }
       headerMeta={`${periodLabel} · 최근 ${recentOrders.length}건`}
     >
       {recentOrders.length === 0 ? (
