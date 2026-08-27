@@ -1,0 +1,32 @@
+/* Dashboard 전용 TableCard 셸. Dashboard theme 토큰(--dashboard-*)을 사용한다. */
+
+.tableCard {
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 45px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dashboard-color-text-primary);
+}
+
+.headerMeta {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--dashboard-color-text-muted);
+}
+
+.body {
+  min-width: 0;
+}

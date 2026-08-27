@@ -1,0 +1,19 @@
+name: PR Target Guard
+
+# master로 향하는 PR은 dev-fe 브랜치에서만 허용한다.
+# (frontend/.claude/rules/git-flow.md 참고)
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, synchronize, edited]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: master PR 출처 확인 (dev-fe만 허용)
+        if: github.head_ref != 'dev-fe'
+        run: |
+          echo "::error::master로의 PR은 dev-fe 브랜치에서만 허용됩니다. 현재 head 브랜치: '${{ github.head_ref }}'. feature/fix/docs/refactor/chore 브랜치는 dev-fe로 PR을 올려주세요."
+          exit 1

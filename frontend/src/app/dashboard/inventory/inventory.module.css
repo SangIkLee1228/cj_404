@@ -1,0 +1,556 @@
+/* Inventory(S-11) 콘텐츠 상단(PageHeader actions) 전용 스타일.
+   목업(frontend/docs/dashboard_mock.html)의 .filters.inventory-filters /
+   .filter-group-label / .filter-divider / .search 규칙을, 이미 구현된
+   Dashboard 공통 UI(SegmentedControl/SelectControl)가 쓰는 --dashboard-*
+   토큰에 맞춰 이 페이지 안에서만 재현한다. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+/* 큰 화면 전용: PageHeader에 이 클래스가 함께 전달됐을 때만 제목/설명과
+   필터를 같은 행 하단 정렬로 바꾼다(다른 Dashboard 페이지는 className을
+   전달하지 않으므로 영향 없음). header.inventoryPageHeader는
+   .pageHeader(dashboard-layout.module.css, 단일 클래스)보다 명시도가 높은
+   엘리먼트+클래스 결합 선택자라, 두 CSS Module이 번들에 실리는 순서에
+   기대지 않고도 항상 이 규칙이 이긴다(!important 불필요).
+
+   breakpoint 1200px 근거: 목업 자체의 상위 breakpoint(1100px, 그 아래에서
+   사이드바가 240px→190px로 줄어듦)에 맞추되, 이 구현의 Sidebar는 항상
+   240px로 고정이라는 차이(+50px 여유)를 더해 잡았다. 이보다 좁으면 필터
+   한 줄의 최소 폭(라벨 + SegmentedControl 2조 + Select + 검색 input의
+   min-width 합)이 제목 영역을 지나치게 압박하므로 wrap으로 되돌아간다. */
+@media (min-width: 1200px) {
+  header.inventoryPageHeader {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+  }
+
+  header.inventoryPageHeader .filters {
+    flex-wrap: nowrap;
+  }
+}
+
+.filterGroupLabel {
+  margin-right: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--dashboard-color-text-muted);
+}
+
+/* 의미 없는 장식용 구분선이라 CSS로만 그리고 접근성 트리에서는
+   aria-hidden으로 제외한다(마크업 쪽 처리). */
+.filterDivider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--dashboard-color-segmented-border);
+}
+
+.searchInput {
+  flex-shrink: 0;
+  min-width: 210px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--dashboard-color-segmented-border);
+  border-radius: 8px;
+  background: var(--dashboard-color-surface);
+  color: var(--dashboard-color-text-primary);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.searchInput::placeholder {
+  color: var(--dashboard-color-text-muted);
+}
+
+.searchInput:hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  border-color: var(--dashboard-color-segmented-hover-border);
+}
+
+.searchInput:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* type="search"이 기본으로 넣는 WebKit 취소(x) 버튼 장식을 최소화해,
+   테두리 없는 아이콘 없이 목업의 단순한 입력창 형태에 가깝게 유지한다. */
+.searchInput::-webkit-search-cancel-button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* "지금 채워야 할 빵" 긴급 보충 영역(F1-5). NoticeCard 자체는 공통
+   컴포넌트를 그대로 쓰고, 여기서는 그 안의 상품 Chip 목록 배치만 담당한다. */
+
+/* "외 N개 더보기"는 재고 표(#inventory-table)로 스크롤하는 텍스트형 보조
+   액션 button이다(F1-6B). 일반 CTA가 아니라 목업의 밑줄 텍스트 링크
+   형태라 공통 Button 대신 페이지 전용 button에서 브라우저 기본 스타일만
+   지운다. */
+.restockMore {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dashboard-color-notice-text);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.restockMore:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+.restockChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 상품명 + 수량·상태 통합 StatusBadge + 버튼 3요소만 한 행에 담는다(수량
+   전용 span을 없애 요소 하나·gap 하나만큼 폭을 줄였다) — 큰 화면에서
+   Chip 5개가 NoticeCard 한 줄에 들어가는 게 목표라 padding/gap을 목업
+   범위 안에서 소폭 좁혔다(기존 9px/12px → 8px/10px). */
+.restockChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--dashboard-color-notice-border);
+  border-radius: 10px;
+  background: var(--dashboard-color-surface);
+}
+
+/* 긴 상품명이 Chip과 주변 레이아웃을 밀어내지 않도록 상한을 두고,
+   그 안에서는 한 줄 유지 후 말줄임으로 처리한다. */
+.restockChipName {
+  overflow: hidden;
+  max-width: 120px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--dashboard-color-text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* NoticeCard와 재고 표(TableCard)를 목업과 비슷한 간격(14px)으로
+   쌓는다. dashboard-layout.module.css의 pageContent를 중첩하지 않고, 이
+   페이지 전용 stack 하나만 그 안에 둔다. */
+.contentStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 재고 목록 표(F1-6A). 좁은 화면에서는 페이지 전체가 아니라 이 wrapper
+   안에서만 가로 스크롤되도록 한다(min-width는 table 쪽에 둔다). */
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+/* 헤더 배경·텍스트 색은 이 저장소에 이미 있는 Dashboard 표 스타일
+   (ui-preview/ui-preview.module.css의 .tableWrap th/td)과 동일한 토큰
+   조합을 그대로 따른다. */
+.table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+  color: var(--dashboard-color-text-primary);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.nowrapCell {
+  white-space: nowrap;
+}
+
+.productCell {
+  max-width: 220px;
+}
+
+/* 긴 상품명이 표 레이아웃을 밀어내지 않도록 상한을 두고 한 줄 유지 후
+   말줄임 처리한다(title로 전체 이름 제공). */
+.productName {
+  overflow: hidden;
+  max-width: 200px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.productCategory {
+  overflow: hidden;
+  max-width: 200px;
+  margin-top: 2px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.remainingQty {
+  font-weight: 700;
+}
+
+.stockRate {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* track/fill 색은 dashboard-theme.module.css의 신규 토큰
+   (--dashboard-color-stock-meter-track/-fill, dashboard_mock.html 근거는
+   해당 토큰 주석 참고)을 그대로 쓴다. */
+.stockMeter {
+  flex-shrink: 0;
+  width: 110px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--dashboard-color-stock-meter-track);
+}
+
+.stockMeterFill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--dashboard-color-stock-meter-fill);
+}
+
+.stockRateText {
+  flex-shrink: 0;
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* LOW/OUT 행 강조. 목업의 옅은 색조를 임의 hex 없이 재현하기 위해 기존
+   상태 배경 토큰을 color-mix()로 surface와 섞는다(모든 최신 evergreen
+   브라우저가 지원). hover 시 비율을 조금 높여 상태 의미가 hover에서도
+   유지되게 한다. .table 아래로만 적용되도록 전역이 아닌 로컬 클래스
+   기준으로 범위를 좁혔다. */
+.table tbody tr[data-status='low'] td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-low-background) 25%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='low']:hover td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-low-background) 35%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='out'] td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-out-background) 25%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.table tbody tr[data-status='out']:hover td {
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-status-out-background) 35%,
+    var(--dashboard-color-surface)
+  );
+}
+
+.tableEmpty {
+  margin: 0;
+  padding: 40px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 긴급 보충 영역의 loading/error 상태 문구. NoticeCard 없이 contentStack
+   안에 바로 표시되므로 tableEmpty와 별도로 얕은 padding만 둔다. */
+.urgentStatusMessage {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 목록/긴급 보충 오류 상태의 "다시 시도" 버튼 배치 전용 wrapper. 각
+   상태 문구(.tableEmpty/.urgentStatusMessage) 아래에 이어 붙여 중앙
+   정렬한다. */
+.stateActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* 페이지네이션 footer(F1-6B). tableWrapper와 형제 요소로, table/tbody
+   안에는 넣지 않는다. 결과 범위(왼쪽)와 이동 영역(오른쪽)을 큰 화면에서는
+   한 행에, 좁은 화면에서는 wrap해 배치한다. */
+.paginationFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--dashboard-color-card-divider);
+}
+
+.paginationCount {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.paginationNav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paginationPageText {
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 재고 조정 모달(F1-7A). Dialog.Portal이 body 바로 아래에 렌더링하므로 이
+   규칙들은 Dashboard .theme 조상 없이도(InventoryAdjustmentModal이 Content에
+   theme 클래스를 직접 붙여) 항상 같은 --dashboard-* 토큰을 참조한다. */
+
+/* 어두운 배경 토큰이 따로 없어 기존 텍스트 색상 토큰 중 가장 어두운
+   --dashboard-color-text-primary를 투명도와 섞어 스크림을 만든다(임의
+   rgba 없음). */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(
+    in srgb,
+    var(--dashboard-color-text-primary) 45%,
+    transparent
+  );
+}
+
+.modalContent {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 61;
+  width: min(520px, calc(100vw - 40px));
+  max-height: 85vh;
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: var(--dashboard-radius-card);
+  background: var(--dashboard-color-surface);
+  box-shadow: var(--dashboard-shadow-card);
+}
+
+.modalContent:focus-visible {
+  outline: none;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--dashboard-color-card-divider);
+}
+
+.modalTitle {
+  margin: 0;
+  color: var(--dashboard-color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modalClose {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dashboard-color-text-muted);
+  cursor: pointer;
+}
+
+.modalClose:hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  color: var(--dashboard-color-text-primary);
+}
+
+.modalClose:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* 스크린 리더 전용 Dialog.Description. 색상 값이 없는 순수 레이아웃
+   유틸리티라 --dashboard-* 토큰과 무관하다. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.modalBody {
+  padding: 16px 18px;
+}
+
+.modalImage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 108px;
+  height: 108px;
+  margin: 0 0 16px;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: var(--dashboard-radius-card);
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+}
+
+.modalImage svg {
+  width: 40px;
+  height: 40px;
+}
+
+/* 모든 필드가 목업에서도 전부 full-width라 2열 grid 대신 단순한 세로
+   스택 하나로 둔다 — 모바일도 자연히 한 열이라 별도 media query가
+   필요 없다. */
+.modalFields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.modalFieldLabel {
+  color: var(--dashboard-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.modalReadonlyInput {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: 9px;
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.modalNumberInput {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: 9px;
+  background: var(--dashboard-color-surface);
+  color: var(--dashboard-color-text-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.modalNumberInput:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* 추가 수량 입력 유효성 안내 문구. 모달 폭을 밀어내지 않도록 필드
+   아래에서 줄바꿈되게 두고 별도 min-width를 두지 않는다. */
+.modalFieldError {
+  margin: 0;
+  color: var(--dashboard-color-status-out-text);
+  font-size: 11px;
+}
+
+/* mutation 실패 문구. adjustPreview와 같은 간격 규칙(modalFields의
+   gap)을 그대로 따르므로 자체 margin은 두지 않는다. */
+.modalSubmitError {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid
+    color-mix(in srgb, var(--dashboard-color-status-out-text) 35%, transparent);
+  border-radius: 9px;
+  background: var(--dashboard-color-status-out-background);
+  color: var(--dashboard-color-status-out-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adjustPreview {
+  padding: 11px 13px;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: 9px;
+  background: var(--dashboard-color-background);
+  color: var(--dashboard-color-text-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adjustPreviewValue {
+  margin-left: 5px;
+  color: var(--dashboard-color-brand-primary);
+  font-size: 16px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

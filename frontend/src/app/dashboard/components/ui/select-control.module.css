@@ -1,0 +1,113 @@
+/* Dashboard 전용 SelectControl(Radix Select) primitive.
+   Trigger는 Dashboard Layout의 .theme 자손이므로 기존 토큰을 상속받아
+   사용한다. Content는 Portal로 body 아래에 렌더링되므로 SelectControl.jsx가
+   themeStyles.theme을 직접 적용해 같은 토큰을 자체적으로 다시 선언한다.
+   새 색상·토큰은 만들지 않고 dashboard-theme.module.css의 기존 값만
+   재사용한다. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 142px;
+  height: 34px;
+  padding: 0 10px 0 13px;
+  border: 1px solid var(--dashboard-color-segmented-border);
+  border-radius: 8px;
+  background: var(--dashboard-color-surface);
+  color: var(--dashboard-color-text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.trigger:not(:disabled):hover {
+  background: var(--dashboard-color-segmented-hover-background);
+  border-color: var(--dashboard-color-segmented-hover-border);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--dashboard-color-brand-primary);
+  outline-offset: 2px;
+}
+
+.trigger:disabled {
+  color: var(--dashboard-color-text-muted);
+  cursor: not-allowed;
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.content {
+  z-index: 50;
+  overflow: hidden;
+  min-width: var(--radix-select-trigger-width);
+  max-height: var(--radix-select-content-available-height);
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: 8px;
+  background: var(--dashboard-color-surface);
+  box-shadow: var(--dashboard-shadow-card);
+}
+
+.viewport {
+  padding: 4px;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 32px 0 10px;
+  border-radius: 6px;
+  color: var(--dashboard-color-text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  outline: none;
+  cursor: default;
+  user-select: none;
+}
+
+.item[data-highlighted] {
+  background: var(--dashboard-color-segmented-hover-background);
+  color: var(--dashboard-color-text-primary);
+}
+
+.item[data-state='checked'] {
+  background: var(--dashboard-color-status-ok-background);
+  color: var(--dashboard-color-status-ok-text);
+  font-weight: 700;
+}
+
+.item[data-disabled] {
+  color: var(--dashboard-color-text-muted);
+  cursor: not-allowed;
+}
+
+.indicator {
+  position: absolute;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.indicator svg {
+  width: 100%;
+  height: 100%;
+}
