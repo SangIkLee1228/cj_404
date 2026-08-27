@@ -313,6 +313,49 @@
   background: currentColor;
 }
 
+/* 데이터 동기화 버튼의 RefreshCw 아이콘 회전. syncing 상태에서만 적용된다. */
+.topbarSyncIconSpinning {
+  animation: dashboardTopbarSyncSpin 0.9s linear infinite;
+}
+
+@keyframes dashboardTopbarSyncSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbarSyncIconSpinning {
+    animation: none;
+  }
+}
+
+/* 동기화 성공/실패 안내 문구. 버튼 옆 한 줄로 표시하고, 최대 너비를
+   제한해 문구 길이에 따라 topbar 높이(64px)나 옆 버튼 위치가 크게
+   흔들리지 않게 한다(시각적으로만 잘리며, 전체 문구는 role/aria-live로
+   보조기기에 그대로 전달된다). 색상은 기존 status-ok/status-out 토큰만
+   재사용한다 — 새 hex/rgb 없음. */
+.topbarSyncMessage {
+  max-width: 220px;
+  overflow: hidden;
+  flex-shrink: 1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbarSyncMessageSuccess {
+  color: var(--dashboard-color-status-ok-text);
+}
+
+.topbarSyncMessageError {
+  color: var(--dashboard-color-status-out-text);
+}
+
 .contentViewport {
   flex: 1;
   min-width: 0;
