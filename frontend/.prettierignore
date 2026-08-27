@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+public
+package-lock.json
+
+# Claude 협업 문서 — 코드 스타일 포매팅 대상 아님
+.claude

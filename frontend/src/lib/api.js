@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 /**
  * FastAPI 백엔드 호출.
@@ -7,8 +7,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
  */
 export async function apiFetch(path, init = {}) {
   const headers = new Headers(init.headers);
-  if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
+  if (
+    !headers.has('Content-Type') &&
+    init.body &&
+    !(init.body instanceof FormData)
+  ) {
+    headers.set('Content-Type', 'application/json');
   }
   return fetch(`${API_URL}${path}`, { ...init, headers });
 }

@@ -1,0 +1,30 @@
+/* Dashboard 전용 비상호작용 상태 Badge. HTML 목업의 .stock-status-pill을
+   근거로 한다. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 66px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.badge[data-status='ok'] {
+  background: var(--dashboard-color-status-ok-background);
+  color: var(--dashboard-color-status-ok-text);
+}
+
+.badge[data-status='low'] {
+  background: var(--dashboard-color-status-low-background);
+  color: var(--dashboard-color-status-low-text);
+}
+
+.badge[data-status='out'] {
+  background: var(--dashboard-color-status-out-background);
+  color: var(--dashboard-color-status-out-text);
+}

@@ -1,0 +1,17 @@
+/* Dashboard 전용 기본 Card. Dashboard theme 토큰(--dashboard-*)을 사용한다. */
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--dashboard-color-card-border);
+  border-radius: var(--dashboard-radius-card);
+  background: var(--dashboard-color-surface);
+  box-shadow: var(--dashboard-shadow-card);
+}
+
+.paddingDefault {
+  padding: 28px 22px;
+}
+
+.paddingNone {
+  padding: 0;
+}
