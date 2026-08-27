@@ -189,6 +189,25 @@
   text-align: center;
 }
 
+/* 운영 현황 전체 loading/error 상태 카드. KPI/차트/최근 판매 대신
+   PageHeader 아래 이 카드 하나만 표시한다. */
+.stateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.stateMessage {
+  margin: 0;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+}
+
 /* 판매 상위 품목 카드 전용 chartBody. 목업(dashboard_mock.html)처럼
    카드 헤더 아래 남은 세로 공간에서 도넛+범례 묶음이 중앙에 오도록,
    이 chartBody만 flex:1로 남은 공간을 채우고 내부 콘텐츠를 세로
