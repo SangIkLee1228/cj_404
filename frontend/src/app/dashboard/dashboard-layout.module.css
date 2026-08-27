@@ -1,5 +1,6 @@
 /* Dashboard 전용 레이아웃 스타일이며 POS를 포함한 다른 화면에
    영향을 주지 않도록 이 파일 안에서만 관리한다. */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
 .layout {
   /* position:fixed + inset:0으로 Dashboard Shell 전체를 viewport에 직접
@@ -12,6 +13,19 @@
   inset: 0;
   display: flex;
   overflow: hidden;
+  /* POS(pos.module.css)와 동일한 CDN·fallback 순서를 쓰되, body/globals.css가
+     아니라 이 .layout 자손으로만 스코프한다 — POS 전역 폰트에 영향 없음. */
+  font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
+}
+
+/* 브라우저 기본 폼 컨트롤 스타일(버튼/입력 등)은 font-family를 상속하지
+   않으므로 Dashboard 범위 안에서만 명시적으로 상속시킨다. font shorthand나
+   font-size/font-weight/line-height는 건드리지 않는다. */
+.layout button,
+.layout input,
+.layout select,
+.layout textarea {
+  font-family: inherit;
 }
 
 .sidebar {
