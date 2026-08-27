@@ -483,9 +483,8 @@
   min-width: 0;
 }
 .rightTitle {
-  font-size: 10px;
   color: #6f675e;
-  margin: 1px 1px 6px;
+  margin: 1px 1px 7px;
   flex: none;
 }
 .rightNote {
@@ -1261,11 +1260,9 @@
   gap: 8px;
 }
 .catalogHead b {
-  font-size: 12px;
   white-space: nowrap;
 }
 .catalogHelp {
-  font-size: 9px;
   color: #857a70;
   white-space: nowrap;
   overflow: hidden;
@@ -1275,35 +1272,26 @@
   background: #f5eee5;
   border-bottom: 1px solid #e7dbcf;
   color: #423930;
-  padding: 7px 9px;
+  padding: 7px 7px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
   flex: none;
 }
-.catalogBrand {
-  font-family: Georgia, serif;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.4px;
-  margin-right: 4px;
-  white-space: nowrap;
-}
 .categoryBtn {
   border: 1px solid transparent;
   background: transparent;
   color: #6d6258;
-  padding: 6px 10px;
+  padding: 5px 7px;
   text-align: center;
-  font-size: 10px;
   cursor: pointer;
   border-radius: 999px;
   line-height: 1.1;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 .categoryBtn:hover {
   background: #fff;
@@ -1582,8 +1570,11 @@
     font-size: 45px;
   }
   .categoryBtn {
-    padding: 5px 7px;
-    font-size: 9px;
+    padding: 4px 5px;
+  }
+  .catalogRail {
+    gap: 2px;
+    padding: 6px 6px;
   }
 }
 @media (max-width: 1120px) {

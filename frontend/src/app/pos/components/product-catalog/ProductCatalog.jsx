@@ -30,15 +30,19 @@ export default function ProductCatalog({
 
   return (
     <>
-      <div className={styles.rightTitle}>
+      <div className={`${styles.rightTitle} text-[12px] leading-snug`}>
         빵·음료 메뉴를 선택해 현재 계산에 직접 추가할 수 있어요
       </div>
       <div className={styles.catalogShell}>
         <section className={styles.catalogMain}>
           <div className={styles.catalogHead}>
             <div className={styles.catalogTitleWrap}>
-              <b>{isDrink ? '음료 상품' : '빵 상품'}</b>
-              <span className={styles.catalogHelp}>
+              <b className="text-[15px] font-extrabold tracking-tight">
+                {isDrink ? '음료 상품' : '빵 상품'}
+              </b>
+              <span
+                className={`${styles.catalogHelp} text-[11px] leading-snug`}
+              >
                 상품 사진을 눌러 계산에 추가
               </span>
             </div>
@@ -60,14 +64,11 @@ export default function ProductCatalog({
             </div>
           </div>
           <nav className={styles.catalogRail} aria-label="상품 카테고리">
-            <div className={styles.catalogBrand}>
-              {isDrink ? 'DRINK' : 'BREAD'}
-            </div>
             {categories.map((c) => (
               <button
                 key={c}
                 type="button"
-                className={`${styles.categoryBtn} ${category === c ? styles.active : ''}`}
+                className={`${styles.categoryBtn} text-[11px] font-semibold tracking-tight max-[1380px]:text-[9px] ${category === c ? styles.active : ''}`}
                 onClick={() => onSetCategory(c)}
               >
                 {category === c ? '✓ ' : ''}
