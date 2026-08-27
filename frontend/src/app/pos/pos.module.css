@@ -896,35 +896,20 @@
   background: linear-gradient(180deg, #fff 0%, #fff 57%, #fffaf5 100%);
   border-radius: 14px;
 }
-.greetingMark {
-  width: 54px;
-  height: 54px;
-  border: 2px solid var(--green);
-  border-radius: 17px;
-  margin: 0 0 13px;
-  position: relative;
-  background: #f1faf6;
-  box-shadow: 0 10px 26px rgba(15, 92, 73, 0.1);
-}
-.greetingMark::before {
-  content: '';
-  position: absolute;
-  left: 9px;
-  right: 9px;
-  bottom: 10px;
-  height: 13px;
-  border: 2px solid var(--green);
-  border-radius: 12px 12px 7px 7px;
-}
-.greetingMark::after {
-  content: '';
-  position: absolute;
-  width: 11px;
-  height: 11px;
+.greetingLogo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--green);
-  border-radius: 50%;
-  left: 20px;
-  top: 10px;
+  border-radius: 10px;
+  padding: 11px 16px;
+  margin: 0 0 16px;
+  box-shadow: 0 10px 26px rgba(15, 92, 73, 0.18);
+}
+.greetingLogoImg {
+  display: block;
+  width: 112px;
+  height: auto;
 }
 .greetingSmall {
   font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', sans-serif;

@@ -108,7 +108,13 @@ export default function CustomerFloatingDisplay({ pos }) {
             </div>
           </div>
           <div className={styles.greetingStage}>
-            <div className={styles.greetingMark} />
+            <div className={styles.greetingLogo}>
+              <img
+                src="/dashboard/logo.png"
+                alt="TOUS les JOURS"
+                className={styles.greetingLogoImg}
+              />
+            </div>
             <div className={styles.greetingSmall}>어서오세요</div>
             <div className={styles.greetingBig}>뚜레쥬르입니다</div>
             <div className={styles.greetingDesc}>
