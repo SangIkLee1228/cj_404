@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.deps import StaffContext, get_staff_context, require_manager
 from app.core.errors import ApiError
+from app.core.images import with_signed_images
 from app.core.supabase_client import get_supabase
 from app.schemas.inventory import (
     InventoryListItem,
@@ -125,7 +126,10 @@ def list_inventory(
     page = items[offset : offset + limit]
     updated_at = max((it.updated_at for it in items), default=datetime.now(UTC))
 
-    return InventoryListResponse(items=page, total=total, limit=limit, offset=offset, updated_at=updated_at)
+    return InventoryListResponse(
+        items=with_signed_images(page), total=total, limit=limit,
+        offset=offset, updated_at=updated_at,
+    )
 
 
 @router.patch("/{product_id}/restock", response_model=RestockResponse)

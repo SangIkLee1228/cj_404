@@ -18,6 +18,7 @@ from app.schemas.scan import (
     ScanSessionCreated,
     ScanSessionDetail,
 )
+from app.services.orders import Amounts
 
 router = APIRouter(prefix="/scan-sessions", tags=["scan"])
 logger = structlog.get_logger("app.scan")
@@ -287,9 +288,11 @@ def discard_scan_session(
         if reverted:
             supabase.table("order_item").delete().eq(
                 "order_id", order_id).execute()
+        # 손으로 쓴 dict는 컬럼을 빠뜨린다 - 실제로 point_earned가 빠져 있어서
+        # 항목을 다 지운 주문이 "금액 0원인데 적립 예정 54p"로 남았다.
+        # Amounts가 컬럼 6종을 한 곳에서 정의하므로 그것을 쓴다.
         supabase.table("orders").update(
-            {"gross_amount": 0, "discount_amount": 0, "membership_discount_amount": 0,
-             "manual_discount_amount": 0, "total_amount": 0}
+            Amounts(0, 0, 0, 0, 0, 0).as_order_columns()
         ).eq("order_id", order_id).execute()
 
     updated = (

@@ -21,6 +21,38 @@ from fastapi.responses import JSONResponse
 
 logger = structlog.get_logger("app.error")
 
+# 모델 전체를 대상으로 한 검증(@model_validator)은 가리킬 입력 칸이 없다.
+# 그동안은 이런 오류의 field가 "body"로 나갔는데, FE 입장에서는 body라는 이름의
+# 필드가 있는 것처럼 보여 어느 칸을 빨갛게 칠할지 알 수 없었다.
+# "어느 칸도 아니다"를 뜻하는 예약어를 쓴다 (API명세서 1.4).
+ROOT_FIELD = "__root__"
+
+# pydantic이 우리 ValueError를 감쌀 때 앞에 붙이는 문구.
+# 검증기에 한국어 메시지를 써 뒀으므로 접두사만 떼면 그대로 화면에 쓸 수 있다.
+_VALUE_ERROR_PREFIX = "Value error, "
+
+
+def _detail_of(err: dict[str, Any]) -> dict[str, str]:
+    """pydantic 오류 1건을 명세서 1.4의 details 항목으로 옮긴다.
+
+    loc에서 "body"를 걸러내는 이유: 요청 바디의 필드는 ("body", "amount") 처럼
+    오는데 FE가 아는 이름은 "amount"뿐이다. 걸러내고 나서 남는 게 없으면
+    모델 단위 검증이라는 뜻이다.
+    """
+    location = [str(part) for part in err.get("loc", []) if part != "body"]
+
+    message = str(err.get("msg", "") or "")
+    if message.startswith(_VALUE_ERROR_PREFIX):
+        message = message[len(_VALUE_ERROR_PREFIX):]
+
+    detail: dict[str, str] = {
+        "field": ".".join(location) if location else ROOT_FIELD,
+        "reason": str(err.get("type", "invalid")),
+    }
+    if message:
+        detail["message"] = message
+    return detail
+
 # HTTP 상태코드 -> 기본 에러코드 (명세서 1.4 표)
 DEFAULT_CODE: dict[int, str] = {
     400: "INVALID_REQUEST",
@@ -81,13 +113,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError):
         # pydantic 검증 실패를 명세서의 details 모양으로 옮긴다.
-        details = [
-            {
-                "field": ".".join(str(p) for p in err.get("loc", []) if p != "body") or "body",
-                "reason": err.get("type", "invalid"),
-            }
-            for err in exc.errors()
-        ]
+        details = [_detail_of(err) for err in exc.errors()]
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=_body(

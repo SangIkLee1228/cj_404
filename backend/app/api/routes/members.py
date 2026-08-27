@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.errors import ApiError
+from app.core.formatting import phone_variants
 from app.core.masking import mask_name
 from app.core.supabase_client import get_supabase
 from app.schemas.common import MemberLookupResponse
@@ -67,10 +68,13 @@ def lookup_member(
     _check_rate_limit(staff.staff_id)
 
     supabase = get_supabase()
+    # 명세서 4.6은 `01012345678`을 쓰는데 MEMBER.phone에는 하이픈이 들어 있다.
+    # eq 하나로 조회하면 정상 회원이 항상 404가 난다 - POST /orders/{id}/member는
+    # 이미 양쪽을 시도하고 있어서, 조회는 실패하는데 연결은 되는 상태였다.
     result = (
         supabase.table("member")
         .select(_SELECT)
-        .eq("phone", phone)
+        .in_("phone", phone_variants(phone))
         .eq("is_active", True)
         .limit(1)
         .execute()

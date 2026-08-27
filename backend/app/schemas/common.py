@@ -183,8 +183,10 @@ class MemberLookupResponse(BaseModel):
     name: str
     grade_code: MembershipGradeCode
     grade_name: str
-    discount_rate: Decimal
-    point_earn_rate: Decimal
+    # float인 이유: 명세서 1.2가 "비율은 소수 number"라고 못박는데, Decimal로 두면
+    # pydantic이 JSON 문자열("0.0100")로 직렬화한다. FE에서 toFixed()가 터진다.
+    discount_rate: float
+    point_earn_rate: float
     point_balance: int
 
 

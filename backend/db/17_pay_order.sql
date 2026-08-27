@@ -19,9 +19,46 @@
 --   품목에 배분하는 것은 별개 문제라 여기서 하지 않는다. 기존 시드도 같은 기준이라
 --   GET /stats/sales가 GET /orders보다 할인분만큼 크게 나오는 것은 의도된 차이다.
 --
+-- [v3] 왜 항목 집계를 변수에 담는가 (2026-08-27)
+--   1단계와 2단계가 order_item을 각각 따로 조회하고 있었다. READ COMMITTED에서는
+--   문장마다 스냅샷이 새로 잡히므로, 두 조회 사이에 커밋된 항목은 **2단계에만** 보인다.
+--   실제로 재현했다 - 1단계 직후 단팥빵 1개를 추가하면:
+--     · 반환 total_amount = 6400  (v_order 스냅샷)
+--     · 실제 반출 항목     = 8400  (2단계 재조회)
+--     · 단팥빵 재고가 부족 검사도 없이 차감됨
+--   즉 2,000원을 덜 받고, 검사되지 않은 재고가 나간다.
+--
+--   고친 방식은 두 겹이다:
+--     ① 항목 집계를 1단계에서 **한 번만** 해 v_items(jsonb)에 담고 2단계가 그것을 쓴다.
+--        검사한 것과 차감하는 것이 반드시 같아진다.
+--     ② 쓰기가 끝난 뒤 order_item 합계를 다시 읽어 처음과 다르면 예외를 던진다.
+--        return이 아니라 raise여야 한다 - return은 이미 쓴 것을 되돌리지 않는다.
+--        errcode 40001(serialization_failure)로 올려 백엔드가 409로 바꾼다.
+--
+--   1단계의 금액 대조도 함께 넣었다. orders.gross_amount와 항목 합계가 어긋난 주문은
+--   애초에 결제하지 않는다(AMOUNT_STALE). 재계산이 누락된 상태를 결제로 확정시키지 않는다.
+--
 -- 트랜잭션: PostgREST에는 다중 문장 트랜잭션이 없어(API명세서 1.6) 상태 전이·재고
 -- 차감·알림·포인트·통계를 이 함수 하나로 묶는다. 나눠 호출하면 재고만 깎이고 결제가
 -- 실패하는 상태가 생긴다.
+
+-- [v3] 주문 항목 '구성'의 지문.
+-- 상품·수량·금액을 order_item_id 순으로 이어 붙여 해시한다. 금액 합계만으로는
+-- 같은 값 다른 상품으로 바꿔치기한 경우를 구분하지 못하기 때문이다.
+create or replace function public.order_item_fingerprint(p_order_id bigint)
+returns text
+language sql
+stable
+as $fp$
+    select coalesce(
+        md5(string_agg(
+            oi.order_item_id || ':' || oi.product_id || 'x' || oi.quantity
+              || '@' || oi.subtotal,
+            ',' order by oi.order_item_id)),
+        '')
+      from order_item oi
+     where oi.order_id = p_order_id;
+$fp$;
 
 create or replace function public.pay_order(
     p_order_id bigint,
@@ -45,6 +82,10 @@ declare
     v_notifs      jsonb := '[]'::jsonb;
     v_low         boolean;
     v_today_kst   date := (now() at time zone 'Asia/Seoul')::date;
+    v_items       jsonb;      -- [v3] 1단계에서 확정한 항목 집계. 2단계가 이것만 본다
+    v_items_total numeric;    -- [v3] 위 집계의 금액 합계 (정가 기준)
+    v_fingerprint text;       -- [v3] 항목 구성 지문. 쓰기 후 대조용
+    v_final_fp    text;       -- [v3] 쓰기 후 다시 계산한 지문
 begin
     ----------------------------------------------------------------
     -- 1단계: 검증만 한다. 여기서는 아무것도 쓰지 않는다.
@@ -63,22 +104,54 @@ begin
                                   'status', v_order.status);
     end if;
 
-    if not exists (select 1 from order_item where order_id = p_order_id) then
+    -- [v3] 항목 집계는 여기서 딱 한 번. 아래 두 루프가 모두 이 값을 쓴다.
+    select coalesce(jsonb_agg(jsonb_build_object(
+                        'product_id',   x.product_id,
+                        'qty',          x.qty,
+                        'amount',       x.amount,
+                        'product_name', x.product_name,
+                        'baseline',     x.baseline)), '[]'::jsonb),
+           coalesce(sum(x.amount), 0)
+      into v_items, v_items_total
+      from (
+            select oi.product_id,
+                   sum(oi.quantity)::int               as qty,
+                   sum(oi.subtotal)::numeric           as amount,
+                   p.product_name,
+                   coalesce(sp.stock_baseline_pct, 20) as baseline
+              from order_item oi
+              join product p  on p.product_id = oi.product_id
+              left join store_product sp
+                     on sp.store_id = p_store_id and sp.product_id = oi.product_id
+             where oi.order_id = p_order_id
+             group by oi.product_id, p.product_name, sp.stock_baseline_pct
+           ) x;
+
+    if jsonb_array_length(v_items) = 0 then
         return jsonb_build_object('ok', false, 'error', 'EMPTY_ORDER');
+    end if;
+
+    -- [v3] 항목 '구성'의 지문. 금액 합계만 비교하면 같은 값 다른 상품으로 바꿔치기하는
+    -- FR-05 재선택(3200원 A 2개 -> 3200원 B 2개)을 못 잡는다. 실제로 재현했다:
+    -- A의 재고가 빠지고 B는 부족 검사도 없이 팔린 채 결제가 성공했다.
+    v_fingerprint := public.order_item_fingerprint(p_order_id);
+
+    -- [v3] 주문에 적힌 공급가와 항목 합계가 어긋나면 결제하지 않는다.
+    -- 재계산이 누락됐거나 다른 세션이 항목을 건드린 상태다.
+    if round(v_items_total) <> round(v_order.gross_amount) then
+        return jsonb_build_object('ok', false, 'error', 'AMOUNT_STALE',
+                                  'gross_amount', round(v_order.gross_amount)::int,
+                                  'items_total',  round(v_items_total)::int);
     end if;
 
     -- 재고를 잠그고 부족분을 모은다
     for v_item in
-        select oi.product_id,
-               sum(oi.quantity)::int              as qty,
-               p.product_name,
-               coalesce(sp.stock_baseline_pct, 20) as baseline
-          from order_item oi
-          join product p  on p.product_id = oi.product_id
-          left join store_product sp
-                 on sp.store_id = p_store_id and sp.product_id = oi.product_id
-         where oi.order_id = p_order_id
-         group by oi.product_id, p.product_name, sp.stock_baseline_pct
+        select (e->>'product_id')::bigint  as product_id,
+               (e->>'qty')::int            as qty,
+               (e->>'amount')::numeric     as amount,
+               e->>'product_name'          as product_name,
+               (e->>'baseline')::int       as baseline
+          from jsonb_array_elements(v_items) e
     loop
         select produced_qty, remaining_qty into v_produced, v_remaining
           from inventory
@@ -105,17 +178,14 @@ begin
     -- 2단계: 여기부터 쓰기. 하나라도 실패하면 함수 전체가 롤백된다.
     ----------------------------------------------------------------
     for v_item in
-        select oi.product_id,
-               sum(oi.quantity)::int              as qty,
-               sum(oi.subtotal)::numeric          as amount,   -- [v2] 통계용
-               p.product_name,
-               coalesce(sp.stock_baseline_pct, 20) as baseline
-          from order_item oi
-          join product p  on p.product_id = oi.product_id
-          left join store_product sp
-                 on sp.store_id = p_store_id and sp.product_id = oi.product_id
-         where oi.order_id = p_order_id
-         group by oi.product_id, p.product_name, sp.stock_baseline_pct
+        -- [v3] 1단계에서 확정한 집계를 그대로 쓴다. 다시 조회하면 그 사이 커밋된
+        -- 항목이 섞여 들어와, 부족 검사를 통과하지 않은 재고가 차감된다.
+        select (e->>'product_id')::bigint  as product_id,
+               (e->>'qty')::int            as qty,
+               (e->>'amount')::numeric     as amount,
+               e->>'product_name'          as product_name,
+               (e->>'baseline')::int       as baseline
+          from jsonb_array_elements(v_items) e
     loop
         update inventory
            set sold_qty      = sold_qty + v_item.qty,
@@ -127,7 +197,13 @@ begin
         returning produced_qty, remaining_qty into v_produced, v_remaining;
 
         if not found then
-            raise exception 'inventory race on product %', v_item.product_id;
+            -- 여기 오면 1단계 잠금 이후에 재고가 줄었다는 뜻이다. 전체 롤백시킨다.
+            -- [v3] errcode 40001 = serialization_failure. 백엔드가 409로 바꾼다.
+            -- 메시지 앞머리로 종류를 구분한다. 백엔드가 INVENTORY_RACE는 재고 부족,
+            -- ORDER_CHANGED는 주문 변경으로 각각 다른 안내를 내보낸다.
+            raise exception 'INVENTORY_RACE product_id=% name=%',
+                  v_item.product_id, v_item.product_name
+                using errcode = '40001';
         end if;
 
         -- [v2] 일별 판매 통계 누적. 같은 상품을 하루에 여러 번 팔면 한 행에 더해진다
@@ -170,6 +246,17 @@ begin
             );
         end if;
     end loop;
+
+    -- [v3] 쓰기가 끝난 시점에 항목 구성이 그대로인지 다시 확인한다.
+    -- 이 SELECT는 새 스냅샷이라, 결제 도중 커밋된 추가·삭제·교체가 여기서 드러난다.
+    -- return이 아니라 raise여야 한다 - return은 위에서 쓴 재고·통계를 되돌리지 않는다.
+    v_final_fp := public.order_item_fingerprint(p_order_id);
+
+    if v_final_fp is distinct from v_fingerprint then
+        raise exception 'ORDER_CHANGED order_id=% before=% after=%',
+              p_order_id, v_fingerprint, v_final_fp
+            using errcode = '40001';
+    end if;
 
     -- 상태 전이
     update orders

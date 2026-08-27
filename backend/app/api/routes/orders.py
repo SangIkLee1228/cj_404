@@ -1,11 +1,13 @@
 from datetime import date
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from postgrest.exceptions import APIError
 
+from app.core.config import get_settings
 from app.core.deps import StaffContext, get_staff_context
 from app.core.errors import ApiError
-from app.core.supabase_client import fetch_all, get_supabase
+from app.core.supabase_client import get_supabase
 from app.core.timeutil import resolve_period
 from app.schemas.orders import (
     ManualDiscountRequest,
@@ -14,7 +16,6 @@ from app.schemas.orders import (
     OrderItemCreate,
     OrderItemUpdate,
     OrderListResponse,
-    OrderSummary,
     PayRequest,
     PayResponse,
 )
@@ -31,11 +32,13 @@ from app.services.orders import (
     load_items,
     load_member_by_phone,
     load_order,
+    load_order_summary,
     load_store_price,
     member_rates,
     money,
     order_detail,
     order_list_item,
+    order_scope,
     recalculate,
     replace_item_product,
     save_manual_discount,
@@ -44,6 +47,10 @@ from app.services.orders import (
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+# Postgres의 serialization_failure. pay_order가 "전체 롤백하고 재시도하라"는 뜻으로
+# 이 코드를 붙여 예외를 던진다 (db/17_pay_order.sql [v3]).
+SERIALIZATION_FAILURE = "40001"
 logger = structlog.get_logger("app.orders")
 
 
@@ -107,40 +114,28 @@ def list_orders(
     staff: StaffContext = Depends(get_staff_context),
 ):
     """판매 내역 목록 (FR-17). 기간 경계는 KST 기준이다."""
-    supabase = get_supabase()
     rng = resolve_period(period, date_from, date_to)
-
-    def scoped(select: str, count: str | None = None):
-        """기간·매장·상태 필터를 한 곳에서 조립한다. 목록과 summary가 같은 조건을 써야 한다."""
-        q = (
-            supabase.table("orders")
-            .select(select, count=count)
-            .eq("store_id", staff.store_id)
-            .gte("ordered_at", rng.start_utc.isoformat())
-            .lt("ordered_at", rng.end_utc_exclusive.isoformat())
-        )
-        return q if order_status == "ALL" else q.eq("status", "PAID")
+    paid_only = order_status != "ALL"
 
     page = (
-        scoped(ORDER_LIST_SELECT, count="exact")
+        order_scope(
+            store_id=staff.store_id,
+            rng=rng,
+            paid_only=paid_only,
+            select=ORDER_LIST_SELECT,
+            count="exact",
+        )
         .order("ordered_at", desc=True)
         .range(offset, offset + limit - 1)
         .execute()
     )
 
-    # summary는 페이지가 아니라 기간 전체 기준이다 (명세서 4.5).
-    # fetch_all로 읽는 이유: 범위를 안 주면 PostgREST가 1000행에서 조용히 자른다.
-    # total은 count="exact"라 정확한데 summary만 1000건분으로 계산돼, 30일 조회에서
-    # "총 2,792건"과 "매출 1,607만원(=1000건분)"이 나란히 표시되는 상태였다.
-    totals = fetch_all(
-        lambda: scoped("total_amount, order_item(quantity)"), order_by="order_id"
-    )
-    summary = OrderSummary(
-        sales_amount=sum(money(r["total_amount"]) for r in totals),
-        order_count=len(totals),
-        item_qty=sum(
-            int(i["quantity"]) for r in totals for i in (r.get("order_item") or [])
-        ),
+    # summary는 페이지가 아니라 **조회 기간 전체** 기준이다 (명세서 4.5).
+    # 집계는 DB 함수(db/19_order_summary.sql)가 한 번에 계산한다. 예전에는 기간 전체
+    # 주문과 딸린 order_item을 전부 받아 파이썬으로 더했는데, 주문이 쌓이는 만큼
+    # 그대로 느려지는 구조였다. 목록과 같은 필터를 쓰도록 order_scope로 묶었다.
+    summary = load_order_summary(
+        store_id=staff.store_id, rng=rng, paid_only=paid_only
     )
 
     return OrderListResponse(
@@ -318,11 +313,40 @@ def unlink_member(
 
 # __________ pay __________
 
+# 시연용 결제 실패 (API명세서 3장 · 9장 🟡4).
+#
+# 명세서에는 "결제 실패 -> 402, 주문은 PENDING 유지"라는 분기가 있는데, PG(카드
+# 결제사)를 붙이지 않아 실패를 만들 방법이 자체가 없었다. 그래서 FE는 존재하지 않는
+# 응답을 처리하는 코드를 들고 있어야 했다.
+#
+# MOCK_PAYMENT_FAILURE=true 일 때만 헤더로 실패를 강제한다. 기본값은 꺼짐이고
+# AUTH_DISABLED와도 분리돼 있어, .env.example을 그대로 복사한 배포에 딸려가지 않는다.
+MOCK_FAILURE_HEADER = "x-mock-payment-failure"
+
+
+def _reject_if_mock_failure(request: Request) -> None:
+    """헤더가 켜져 있으면 아무것도 쓰지 않고 402로 끝낸다.
+
+    호출 위치가 중요하다 - pay_order RPC보다 **앞**이어야 주문이 PENDING으로 남고
+    재고도 그대로다. 명세서가 말하는 "화면도 옮기지 않는다"가 성립한다.
+    """
+    if not get_settings().mock_payment_failure:
+        return
+    if request.headers.get(MOCK_FAILURE_HEADER, "").lower() not in {"1", "true", "yes"}:
+        return
+    raise ApiError(
+        status.HTTP_402_PAYMENT_REQUIRED,
+        "PAYMENT_FAILED",
+        "카드 승인이 거절되었습니다. 다른 결제 수단으로 다시 시도해 주세요.",
+    )
+
+
 
 @router.post("/{order_id}/pay", response_model=PayResponse)
 def pay_order(
     order_id: int,
     payload: PayRequest,
+    request: Request,
     staff: StaffContext = Depends(get_staff_context),
 ):
     '''
@@ -334,22 +358,48 @@ def pay_order(
     order = load_order(order_id, staff)     # 404 / 403
     ensure_pending(order)
 
+    _reject_if_mock_failure(request)
+
     if payload.point_used:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "포인트 사용은 이번 범위에 포함되지 않습니다.")
 
-    result = (
-        get_supabase()
-        .rpc(
-            "pay_order",
-            {
-                "p_order_id": order_id,
-                "p_store_id": staff.store_id,
-                "p_payment_method": payload.payment_method,
-            },
-        )
-        .execute()
-    ).data
+    try:
+        result = (
+            get_supabase()
+            .rpc(
+                "pay_order",
+                {
+                    "p_order_id": order_id,
+                    "p_store_id": staff.store_id,
+                    "p_payment_method": payload.payment_method,
+                },
+            )
+            .execute()
+        ).data
+    except APIError as exc:
+        # pay_order는 쓰기를 시작한 뒤 문제를 발견하면 return이 아니라 raise를 쓴다.
+        # return은 이미 깎은 재고를 되돌리지 않기 때문이다. 그래서 전체 롤백을 노린
+        # 이 예외들만 40001(serialization_failure)로 올려 보내고, 여기서 409로 바꾼다.
+        # 그대로 두면 APIError는 HTTPException이 아니라 500 INTERNAL_ERROR로 나간다.
+        if str(getattr(exc, "code", "")) != SERIALIZATION_FAILURE:
+            raise
+        message = str(getattr(exc, "message", "") or "")
+        logger.warning("order.pay_conflict", order_id=order_id, detail=message)
+
+        # 같은 40001이라도 원인이 둘이다. FE가 보여줄 안내가 다르므로 나눠서 내보낸다.
+        if message.startswith("INVENTORY_RACE"):
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "INVENTORY_SHORTAGE",
+                "결제 직전에 재고가 소진됐습니다. 수량을 확인한 뒤 다시 시도해 주세요.",
+            ) from exc
+
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            "ORDER_CHANGED",
+            "결제 중 주문 내용이 바뀌었습니다. 화면을 새로고침한 뒤 다시 결제해 주세요.",
+        ) from exc
 
     if not result.get("ok"):
         code = result.get("error")
@@ -373,6 +423,20 @@ def pay_order(
         if code == "EMPTY_ORDER":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "항목이 없는 주문은 결제할 수 없습니다"
+            )
+
+        if code == "AMOUNT_STALE":
+            # 주문에 적힌 공급가와 항목 합계가 어긋난 상태. 재계산이 누락됐거나
+            # 다른 단말이 항목을 건드렸다. 틀린 금액으로 확정하느니 막는다.
+            logger.warning(
+                "order.amount_stale", order_id=order_id,
+                gross_amount=result.get("gross_amount"),
+                items_total=result.get("items_total"),
+            )
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "AMOUNT_STALE",
+                "주문 금액이 최신이 아닙니다. 화면을 새로고침한 뒤 다시 결제해 주세요.",
             )
 
         raise HTTPException(status.HTTP_409_CONFLICT, "결제할 수 없는 주문 상태입니다")

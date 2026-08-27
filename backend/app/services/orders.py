@@ -10,22 +10,24 @@ DB 접근을 섞지 않은 이유:
     금액은 틀리면 곧바로 사고인 영역이라 테스트 가능성을 최우선으로 둔다.
 """
 
-import re
 from dataclasses import dataclass  # 금액 묶음을 담을 Amounts 클래스용
-from decimal import ROUND_FLOOR, Decimal  # 명세서 1.5가 floor를 명시 → 반올림 아님
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal  # 명세서 1.5가 floor를 명시 → 반올림 아님
 
 import structlog  # 기존 코드가 쓰는 로거. print/logging 대신 통일
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 
 from app.core.deps import StaffContext
-from app.core.formatting import item_summary
+from app.core.formatting import item_summary, phone_variants
 from app.core.masking import mask_name
-from app.core.supabase_client import get_supabase
+from app.core.supabase_client import fetch_all, get_supabase
+from app.core.timeutil import DateRange
 from app.schemas.orders import (
     OrderDetail,
     OrderItemRead,
     OrderListItem,
     OrderMemberSummary,
+    OrderSummary,
 )
 
 logger = structlog.get_logger("app.services.orders")
@@ -171,7 +173,25 @@ def recalculate(order: dict) -> tuple[dict, list[dict]]:
 
     columns = amounts.as_order_columns()
 
-    get_supabase().table("orders").update(columns).eq("order_id", order_id).execute()
+    # status 조건을 함께 거는 이유: ensure_pending()은 몇 밀리초 전에 읽은 스냅샷을
+    # 본 것이라, 그 사이 다른 단말이 결제를 끝냈을 수 있다. 조건이 없으면 이미 PAID인
+    # 주문의 금액을 덮어써서, 실제로 받은 금액과 장부가 영구히 어긋난다.
+    # 조건이 걸리면 아무 행도 안 맞고, 그때는 조용히 넘어가지 않고 409로 알린다.
+    updated = (
+        get_supabase()
+        .table("orders")
+        .update(columns)
+        .eq("order_id", order_id)
+        .eq("status", "PENDING")
+        .execute()
+    ).data
+
+    if not updated:
+        logger.warning("order.recalculate_on_non_pending", order_id=order_id)
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "결제가 완료되었거나 취소된 주문입니다. 화면을 새로고침해 주세요.",
+        )
 
     return {**order, **columns}, items
 
@@ -388,6 +408,41 @@ def load_item(order_id: int, order_item_id: int) -> dict:
     return rows[0]
 
 
+def _reject_over_limit(current: int, adding: int) -> None:
+    """합산 결과가 한 행의 수량 상한을 넘으면 400.
+
+    예전에는 min()으로 조용히 잘랐다. 그러면 트레이에 105개를 올려도 99개 값만 받고
+    나머지는 장부에서 사라진다 - 직원도 손님도 모른 채 금액이 어긋난다.
+    """
+    if current + adding > MAX_ITEM_QUANTITY:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"한 상품의 수량은 {MAX_ITEM_QUANTITY}개를 넘을 수 없습니다 "
+            f"(현재 {current}, 추가 요청 {adding})",
+        )
+
+
+def ensure_merge_within_limit(
+    order_id: int, product_id: int, quantity: int, *, exclude_item_id: int | None = None
+) -> None:
+    """합산했을 때 한도를 넘는지 **쓰기 전에** 확인한다 (FR-05 재선택용).
+
+    exclude_item_id는 이번에 지울 행이다. 자기 자신을 세면 안 된다.
+    """
+    rows = (
+        get_supabase()
+        .table("order_item")
+        .select("order_item_id, quantity")
+        .eq("order_id", order_id)
+        .eq("product_id", product_id)
+        .execute()
+    ).data
+    current = sum(
+        int(row["quantity"]) for row in rows if row["order_item_id"] != exclude_item_id
+    )
+    _reject_over_limit(current, quantity)
+
+
 def add_quantity(order_id: int, product_id: int, quantity: int, unit_price: int, source_type: str) -> None:
     ''''
     동일 상품이 이미 있으면 수량 합산, 없으면 새 행 (명세서 4.5).
@@ -419,7 +474,8 @@ def add_quantity(order_id: int, product_id: int, quantity: int, unit_price: int,
         return
 
     existing = rows[0]
-    merged = min(existing["quantity"] + quantity, MAX_ITEM_QUANTITY)
+    merged = existing["quantity"] + quantity
+    _reject_over_limit(existing["quantity"], quantity)
     price = money(existing["unit_price"])   # 기존 행의 스냅샷 가격을 유지한다.
     supabase.table("order_item").update(
         {
@@ -450,8 +506,15 @@ def delete_item(order_item_id: int) -> None:
 
 
 def replace_item_product(order_id: int, item: dict, new_product_id: int, quantity: int, store_id: int) -> None:
-    ''' 상품 재선택 (FR-05). 대상 상품이 이미 담겨 있으면 합산 후 원래 행을 지운다. '''
+    """상품 재선택 (FR-05). 대상 상품이 이미 담겨 있으면 합산 후 원래 행을 지운다.
+
+    합산 한도를 **지우기 전에** 확인한다. add_quantity가 99 초과에서 400을 던지는데,
+    삭제가 이미 커밋된 뒤에 던지면 항목만 사라지고 orders 금액은 옛 값 그대로 남는다.
+    그 상태의 주문은 gross_amount와 항목 합계가 어긋나 pay_order가 AMOUNT_STALE로
+    거부한다 - 화면을 새로고침해도 풀리지 않는 막다른 길이 된다.
+    """
     unit_price = load_store_price(new_product_id, store_id)
+    ensure_merge_within_limit(order_id, new_product_id, quantity, exclude_item_id=item["order_item_id"])
     delete_item(item["order_item_id"])
     add_quantity(order_id, new_product_id, quantity,
                  unit_price, "STAFF_CORRECTED")
@@ -491,20 +554,6 @@ _MEMBER_SELECT = (
 )
 
 
-def _phone_variants(phone: str) -> list[str]:
-    """'010-5506-5012'와 '01055065012'를 모두 만들어 준다.
-
-    명세서 4.6은 하이픈 없는 형식을 쓰는데 DB 시드는 하이픈을 포함해 저장돼 있다.
-    어느 쪽으로 들어와도 찾히도록 두 표기를 모두 조회한다.
-    (근본 해결은 DB를 숫자만으로 통일하는 것 - 팀 협의 필요)
-    """
-    digits = re.sub(r"\D", "", phone)
-    variants = {digits}
-    if len(digits) == 11:
-        variants.add(f"{digits[:3]}-{digits[3:7]}-{digits[7:]}")
-    elif len(digits) == 10:
-        variants.add(f"{digits[:3]}-{digits[3:6]}-{digits[6:]}")
-    return list(variants)
 
 
 def load_member_by_phone(phone: str) -> dict:
@@ -513,7 +562,7 @@ def load_member_by_phone(phone: str) -> dict:
         get_supabase()
         .table("member")
         .select(_MEMBER_SELECT)
-        .in_("phone", _phone_variants(phone))
+        .in_("phone", phone_variants(phone))
         .eq("is_active", True)
         .limit(1)
         .execute()
@@ -576,4 +625,122 @@ def order_list_item(row: dict) -> OrderListItem:
         total_amount=money(row["total_amount"]),
         member_applied=row.get("member_id") is not None,
         point_earned=row["point_earned"],
+    )
+
+
+# __________ 목록 조회 범위 · 기간 집계 __________
+
+# "이 매장의 / 이 기간의 / 이 상태인 주문"이라는 조건은 목록과 summary가 **반드시**
+# 똑같아야 한다. 어긋나면 "총 95건인데 매출은 80건분"처럼 화면에서만 티가 나는
+# 종류의 버그가 된다. 그래서 조건을 한 곳에서만 조립한다.
+def order_scope(
+    *,
+    store_id: int,
+    rng: DateRange,
+    paid_only: bool,
+    select: str,
+    count: str | None = None,
+):
+    """기간·매장·상태 필터가 걸린 orders 쿼리 빌더를 만든다.
+
+    완성된 쿼리가 아니라 빌더를 돌려주는 이유: 호출부가 .order()/.range()를
+    이어 붙여야 하고, PostgREST 빌더는 execute() 후 재사용할 수 없기 때문이다.
+    """
+    query = (
+        get_supabase()
+        .table("orders")
+        .select(select, count=count)
+        .eq("store_id", store_id)
+        .gte("ordered_at", rng.start_utc.isoformat())
+        .lt("ordered_at", rng.end_utc_exclusive.isoformat())
+    )
+    return query.eq("status", "PAID") if paid_only else query
+
+
+SUMMARY_RPC = "order_summary"
+
+# PostgREST가 "그런 함수 없다"고 답할 때의 신호들.
+# PGRST202 = 스키마 캐시에 함수가 없음, 42883 = Postgres의 undefined_function.
+_MISSING_FUNCTION_CODES = {"PGRST202", "42883"}
+_MISSING_FUNCTION_HINT = "could not find the function"
+
+
+def _is_missing_function(exc: APIError) -> bool:
+    """db/19_order_summary.sql 미적용 상황인지 판별한다.
+
+    다른 DB 오류(권한, 타입 불일치 등)까지 폴백으로 삼키면 성능 문제가 조용히
+    숨어버리므로, '함수 없음'만 좁게 잡는다.
+    """
+    code = str(getattr(exc, "code", "") or "")
+    message = str(getattr(exc, "message", "") or "").lower()
+    return code in _MISSING_FUNCTION_CODES or _MISSING_FUNCTION_HINT in message
+
+
+def _summary_by_scan(*, store_id: int, rng: DateRange, paid_only: bool) -> OrderSummary:
+    """RPC가 없을 때의 폴백. 기간 전체를 읽어 파이썬으로 합산한다.
+
+    fetch_all을 쓰는 이유: 범위를 주지 않으면 PostgREST가 1000행에서 조용히 자른다.
+    total은 count='exact'라 정확한데 summary만 1000건분으로 계산돼, 30일 조회에서
+    "총 2,792건"과 "매출 1,607만원"이 나란히 표시된 적이 있다.
+    """
+    rows = fetch_all(
+        lambda: order_scope(
+            store_id=store_id,
+            rng=rng,
+            paid_only=paid_only,
+            select="total_amount, order_item(quantity)",
+        ),
+        order_by="order_id",
+    )
+    # 행마다 반올림해서 더하면 안 된다. SQL 함수는 numeric으로 다 더한 뒤 한 번
+    # 반올림하고, 파이썬 round()는 은행가 반올림이라 결과가 갈린다.
+    # (1000.50 세 건 -> 파이썬 3000, Postgres 3002. 실측으로 확인했다.)
+    # 지금은 모든 금액이 정수라 차이가 없지만, 원 단위 미만이 생기는 순간 갈린다.
+    # 시작값을 Decimal("0")으로 주는 이유: 행이 하나도 없으면 sum()이 int 0을 돌려주고
+    # int에는 quantize가 없어 500이 난다. 폴백은 "함수가 아직 없는 환경"용이라
+    # 시드 전 빈 매장에서 가장 먼저 밟히는 경로다.
+    total = sum((Decimal(str(row["total_amount"])) for row in rows), Decimal("0"))
+    return OrderSummary(
+        sales_amount=int(total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+        order_count=len(rows),
+        item_qty=sum(
+            int(item["quantity"]) for row in rows for item in (row.get("order_item") or [])
+        ),
+    )
+
+
+def load_order_summary(*, store_id: int, rng: DateRange, paid_only: bool) -> OrderSummary:
+    """조회 기간 전체의 매출·건수·수량 (API명세서 4.5).
+
+    DB 함수 한 번으로 끝내고, 함수가 아직 적용되지 않은 환경에서만 폴백한다.
+    폴백은 결과가 같지만 느리다 - 경고 로그를 남겨 마이그레이션을 잊지 않게 한다.
+    """
+    try:
+        data = (
+            get_supabase()
+            .rpc(
+                SUMMARY_RPC,
+                {
+                    "p_store_id": store_id,
+                    "p_from": rng.start_utc.isoformat(),
+                    "p_to": rng.end_utc_exclusive.isoformat(),
+                    "p_paid_only": paid_only,
+                },
+            )
+            .execute()
+        ).data
+    except APIError as exc:
+        if not _is_missing_function(exc):
+            raise
+        logger.warning(
+            "orders.summary_rpc_missing",
+            rpc=SUMMARY_RPC,
+            hint="db/19_order_summary.sql 을 Supabase에 적용할 것. 지금은 느린 폴백으로 응답한다.",
+        )
+        return _summary_by_scan(store_id=store_id, rng=rng, paid_only=paid_only)
+
+    return OrderSummary(
+        sales_amount=int(data["sales_amount"]),
+        order_count=int(data["order_count"]),
+        item_qty=int(data["item_qty"]),
     )
