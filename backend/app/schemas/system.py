@@ -18,3 +18,16 @@ class ModelVersion(BaseModel):
     released_at: datetime | None = None
     created_by: str | None = None
     created_at: datetime
+
+
+class HealthResponse(BaseModel):
+    '''GET /health 응답 (API 명세서 4.1)'''
+    status: str = "ok"
+    version: str
+
+
+class ReadyResponse(BaseModel):
+    '''GET /health/ready 응답. 의존 서비스별 상태를 checks 에 담는다.'''
+
+    status: str
+    checks: dict[str, str]

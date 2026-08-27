@@ -81,3 +81,101 @@ class CorrectionLog(BaseModel):
     corrected_by_type: CorrectedByType
     corrected_by_staff_id: int | None = None
     corrected_at: datetime
+
+# ─────────────────────────────────────────────────────────────
+# API 응답 모델
+# 위의 ScanSession/DetectedItem은 DB 행을 비추는 모델이고,
+# 아래는 API가 밖으로 내보내는 모양이다. 둘은 일부러 다르다.
+# ─────────────────────────────────────────────────────────────
+
+
+class BBox(BaseModel):
+    """탐지 박스. 좌상단 원점, 0~1로 정규화 (API명세서 4.4).
+
+    DB는 bbox_x/y/w/h 4개 컬럼이지만 응답에서는 객체 하나로 묶는다.
+    AI가 박스를 못 준 경우가 있어 전부 None 허용이다.
+    """
+
+    x: float | None = None
+    y: float | None = None
+    w: float | None = None
+    h: float | None = None
+
+
+class DetectedItemRead(BaseModel):
+    """인식 항목 1건.
+
+    product_id가 None이면 AI 클래스에 매칭되는 상품이 없다는 뜻이고,
+    그때 ai_class_label은 '__UNMATCHED__'다(API명세서 4.4).
+    """
+
+    detected_item_id: int
+    product_id: int | None = None
+    product_name: str | None = None      # product 조인에서 온다
+    ai_class_label: str                  # NOT NULL - AI 원본 출력
+    confidence: float = Field(ge=0, le=100)   # 0~100 스케일. 화면에는 노출 금지
+    quantity: int
+    is_below_threshold: bool             # 임계값 판정은 서버가 한다
+    bbox: BBox
+
+
+class ScanOrderSummary(BaseModel):
+    """세션이 붙은 주문의 금액 요약. 촬영 완료 확인 모달이 이걸 쓴다."""
+
+    gross_amount: int
+    total_amount: int
+    item_count: int
+
+
+class ScanSessionCreated(BaseModel):
+    """POST /api/scan-sessions → 201.
+
+    order_id가 int(옵셔널 아님)인 이유: 이 엔드포인트는 order_id를 필수로 받으므로
+    응답에서 None일 수 없다. 아래 ScanSessionDetail은 다르다.
+    """
+
+    scan_session_id: int
+    order_id: int
+    capture_type: CaptureType
+    status: ScanSessionStatus
+    started_at: datetime
+
+
+class ScanSessionDetail(BaseModel):
+    """GET /api/scan-sessions/{id} 와 recognize의 공통 응답.
+
+    order_id가 None일 수 있는 이유: 세션이 폐기되면 주문 연결이 끊긴다.
+    """
+
+    scan_session_id: int
+    order_id: int | None = None
+    capture_type: CaptureType
+    status: ScanSessionStatus
+    overlap_warning: bool
+    recognition_ms: int | None = None
+    failure_reason: str | None = None
+    started_at: datetime
+    completed_at: datetime | None = None
+    detected_items: list[DetectedItemRead]
+    order_summary: ScanOrderSummary | None = None
+
+
+class ScanCancelResponse(BaseModel):
+    """POST /api/scan-sessions/{id}/cancel.
+
+    failure_reason이 str(옵셔널 아님)인 이유: 이 라우트가 같은 UPDATE에서
+    'CANCELLED_BY_STAFF'를 반드시 넣기 때문이다. 비어 있으면 그게 버그다.
+    """
+
+    scan_session_id: int
+    status: ScanSessionStatus
+    failure_reason: str
+
+
+class ScanDiscardResponse(BaseModel):
+    """POST /api/scan-sessions/{id}/discard."""
+
+    scan_session_id: int
+    order_id: int | None = None
+    status: ScanSessionStatus
+    reverted_item_count: int   # 비운 주문 항목 수. 주문이 없으면 0

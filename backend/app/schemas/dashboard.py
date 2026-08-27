@@ -13,10 +13,22 @@ class DashboardKpi(BaseModel):
     correction_rate: float = 0.0
     low_stock_count: int
 
+    # 목업 KPI 카드의 "▼5.0% 전 기간 대비". 비교 대상은 직전 동일 길이 기간이며
+    # (오늘↔어제, 최근 7일↔그 이전 7일) 판매 통계의 change_pct와 같은 규칙을 쓴다.
+    prev_sales_amount: int = 0
+    prev_order_count: int = 0
+    prev_item_qty: int = 0
+    sales_change_pct: float = 0.0
+    order_change_pct: float = 0.0
+    item_change_pct: float = 0.0
+
 
 class SalesChartPoint(BaseModel):
+    """목업 그래프는 막대=매출(원) + 꺾은선=결제 건수의 이중축이라 두 값이 다 필요하다."""
+
     label: str
     amount: int
+    order_count: int = 0
 
 
 class SalesChart(BaseModel):
@@ -28,6 +40,18 @@ class TopProduct(BaseModel):
     product_id: int
     product_name: str
     sold_qty: int
+    share_pct: float = 0.0
+
+
+class TopProductsOthers(BaseModel):
+    """목업 도넛의 '기타' 조각 - 상위 5개에 들지 못한 나머지 상품 전부를 묶은 것.
+
+    도넛 중앙에 찍히는 전체 판매 수량은 kpi.item_qty와 같은 값이라 따로 내려주지 않는다.
+    """
+
+    product_count: int
+    sold_qty: int
+    share_pct: float = 0.0
 
 
 class RecentOrder(BaseModel):
@@ -55,6 +79,7 @@ class DashboardOverviewResponse(BaseModel):
     kpi: DashboardKpi
     sales_chart: SalesChart
     top_products: list[TopProduct]
+    top_products_others: TopProductsOthers
     recent_orders: list[RecentOrder]
     low_stock: list[LowStockItem]
     updated_at: datetime
