@@ -135,6 +135,31 @@
   text-align: center;
 }
 
+/* 목록 전체 loading/error 상태 카드. KPI 3장 + 표 대신 PageHeader 아래
+   이 카드 하나만 표시한다(KPI가 API summary에 의존하므로 응답이 없으면
+   함께 대체한다). */
+.stateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.stateMessage {
+  margin: 0;
+  color: var(--dashboard-color-text-muted);
+  font-size: 12px;
+}
+
+.stateActions {
+  display: flex;
+  justify-content: center;
+}
+
 /* 페이지네이션 footer. tableWrapper와 형제 요소로, table/tbody 안에는
    넣지 않는다. */
 .paginationFooter {

@@ -1,35 +1,35 @@
-// Dashboard 판매 내역(S-07) 화면이 쓸 순수 데이터 파생 로직.
+// Dashboard 판매 내역(S-07) 화면이 쓸 순수 데이터·UI 상수.
 //
 // React/브라우저 API에 의존하지 않는다. 이 화면의 주 계약은 실제
-// GET /api/orders(목록)·GET /api/orders/{id}(상세)다 — 아직 fetch는
-// 구현하지 않고, sales-mock-data.js의 Mock으로 같은 shape을 흉내낸다.
-// 이전 버전에서 쓰던 GET /api/stats/sales 전용 build 함수와 group_by
-// 전제는 제거했다(판매 페이지가 그 엔드포인트를 쓰지 않으므로).
+// GET /api/orders(목록)다 — 실제 요청·Zod 검증은 api/sales-api.js가
+// 담당한다. GET /api/orders/{id}(상세)는 3/4에서 연결한다.
 //
 // Inventory/Products의 *-data.js와 같은 구조를 참고했지만 그 파일들을
 // import하지 않는다. 이 파일이 제공하는 역할은 다음과 같다.
 //
 //   1) buildSalesOrdersApiQuery       — 화면 조회 상태 → 실제
 //                                        GET /api/orders 요청 파라미터
-//   2) queryMockSalesOrders           — (API 연결 전 임시) Mock 목록을
-//                                        페이지 단위로 조회. summary는
-//                                        페이지가 아니라 선택 기간 전체
-//                                        기준으로 함께 반환한다.
-//   3) queryMockSalesOrderDetail      — (API 연결 전 임시) order_id 기준
-//                                        Mock 상세 단건 조회
-//   4) mapSalesOrdersResponseToPageInfo — 목록 응답 → 화면 표시용 페이지
+//   2) mapSalesOrdersResponseToPageInfo — 목록 응답 → 화면 표시용 페이지
 //                                        메타 정보(timezone/summary 포함)
-//   5) getSalesPeriodLabel            — 기간 값 → 화면 표시용 긴 라벨
-//   6) formatSalesDateTime            — timezone 기준 결제/주문 시각 포맷
-//                                        (목록·상세 화면이 공유, ISO 문자열
-//                                        slice 금지 요구사항 때문에 추가)
-import {
-  SALES_MOCK_ORDER_LIST_ITEMS,
-  SALES_MOCK_ORDER_DETAILS,
-  SALES_PAGE_SIZE,
-  SALES_MOCK_REFERENCE_DATE,
-  SALES_TIMEZONE,
-} from './sales-mock-data';
+//   3) getSalesPeriodLabel            — 기간 값 → 화면 표시용 긴 라벨
+//   4) formatSalesDateTime            — timezone 기준 결제/주문 시각 포맷
+//   5) SALES_PAGE_SIZE/SALES_PERIOD_FILTER_OPTIONS/SALES_TIMEZONE —
+//      필터 UI 상수(sales-mock-data.js에 동일한 이름의 export가 남아
+//      있지만, production runtime은 이제 이 파일의 정의만 쓴다)
+
+// Sales 목록의 페이지당 노출 개수이자 실제 API 요청의 limit 값.
+export const SALES_PAGE_SIZE = 30;
+
+// 목록 응답의 timezone 필드 기본값이자, 응답에 값이 없을 때(방어적
+// fallback)의 표시 기준.
+export const SALES_TIMEZONE = 'Asia/Seoul';
+
+// 조회 기간 필터 선택 항목(SegmentedControl용 짧은 라벨).
+export const SALES_PERIOD_FILTER_OPTIONS = [
+  { value: 'TODAY', label: '오늘' },
+  { value: '7D', label: '1주일' },
+  { value: '30D', label: '1개월' },
+];
 
 // 화면 조회 상태의 기본값. 기간은 오늘, 1페이지부터 시작. 화면이 실수로 이
 // 객체를 직접 mutate해 다른 화면 상태와 뒤섞이는 일이 없도록 freeze한다.
@@ -38,23 +38,14 @@ export const DEFAULT_SALES_QUERY = Object.freeze({
   page: 1,
 });
 
-// page 값을 1 이상의 정수로 보정한다 — buildSalesOrdersApiQuery와
-// queryMockSalesOrders가 동일한 보정 규칙을 공유하기 위한 내부 helper라
-// export하지 않는다.
+// page 값을 1 이상의 정수로 보정한다 — buildSalesOrdersApiQuery의 내부
+// helper라 export하지 않는다.
 function resolveQueryPage(page) {
   const numericPage = Number(page);
   return Number.isFinite(numericPage)
     ? Math.max(1, Math.trunc(numericPage))
     : 1;
 }
-
-// 세 기간의 시작일. 지침이 고정 기준일(2026-08-26)에서 역산해 명시한 값
-// 그대로다 — 이 값이 곧 계약이라 별도 날짜 연산 유틸을 두지 않았다.
-const PERIOD_START_DATE = {
-  TODAY: SALES_MOCK_REFERENCE_DATE,
-  '7D': '2026-08-20',
-  '30D': '2026-07-28',
-};
 
 const PERIOD_LABEL = {
   TODAY: '오늘',
@@ -67,60 +58,12 @@ export function getSalesPeriodLabel(period) {
   return PERIOD_LABEL[period] ?? PERIOD_LABEL.TODAY;
 }
 
-// order_id로 상세 Mock을 즉시 찾기 위한 조회용 Map. 모듈 로드 시 한 번만
-// 만들고, 원본 배열(SALES_MOCK_ORDER_DETAILS)은 mutate하지 않는다.
-const ORDER_DETAIL_BY_ID = new Map(
-  SALES_MOCK_ORDER_DETAILS.map((detail) => [detail.order_id, detail])
-);
-
-// UTC(+00:00) ISO 문자열에서, 그 시각이 Asia/Seoul(연중 고정 UTC+9)
-// 기준으로 속하는 달력 날짜('YYYY-MM-DD')를 구한다. 문자열 slice 대신
-// 실제 UTC 오프셋을 더하는 계산이라 타임스탬프가 어떤 오프셋으로 와도
-// KST 날짜를 정확히 구한다(현재는 항상 +00:00 고정이지만, slice와 달리
-// 오프셋이 달라져도 깨지지 않는다).
-function getKstDateKey(isoString) {
-  const utcMs = Date.parse(isoString);
-  const kstMs = utcMs + 9 * 60 * 60 * 1000;
-  const kstDate = new Date(kstMs);
-  const y = kstDate.getUTCFullYear();
-  const m = String(kstDate.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(kstDate.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// SALES_MOCK_ORDER_LIST_ITEMS(이미 paid_at 최신순 정렬)에서 기간 범위에
-// 드는 주문만 남긴다. filter는 살아남은 요소의 상대 순서를 바꾸지 않으므로
-// 다시 정렬하지 않는다. Mock 데이터는 전부 PAID 상태로만 생성되므로 별도
-// 상태 필터는 두지 않는다(목록 item에는 애초에 status 필드가 없다 — 실제
-// 계약과 동일).
-function filterOrdersByPeriod(period) {
-  const startDate = PERIOD_START_DATE[period] ?? PERIOD_START_DATE.TODAY;
-  const endDate = SALES_MOCK_REFERENCE_DATE;
-
-  return SALES_MOCK_ORDER_LIST_ITEMS.filter((order) => {
-    const dateKey = getKstDateKey(order.paid_at ?? order.ordered_at);
-    return dateKey >= startDate && dateKey <= endDate;
-  });
-}
-
-// 선택 기간 전체 주문(현재 페이지 items가 아님) 기준으로 요약을 계산한다.
-// queryMockSalesOrders 내부에서만 쓰는 helper — 화면이 summary를 별도로
-// 다시 조회하거나 계산하지 않도록, 목록 응답에 항상 포함해 돌려준다.
-function computeSummary(periodOrders) {
-  return {
-    sales_amount: periodOrders.reduce(
-      (sum, order) => sum + order.total_amount,
-      0
-    ),
-    order_count: periodOrders.length,
-    item_qty: periodOrders.reduce((sum, order) => sum + order.item_count, 0),
-  };
-}
-
 // 화면 조회 상태를 실제 GET /api/orders 요청 파라미터로 변환한다.
 // URLSearchParams에 바로 넘길 수 있는 단순한 구조를 반환할 뿐, 실제 URL
-// 조립이나 fetch 호출은 하지 않는다. 화면이 실제로 쓰는 값만 포함한다
-// (category/group_by 등 쓰지 않는 파라미터는 추가하지 않음).
+// 조립이나 fetch 호출은 하지 않는다. status는 실제 API 기본값이 이미
+// "PAID"이지만, 백엔드 기본값이 바뀌어도 이 화면의 의미(결제 완료 내역만
+// 표시)가 흔들리지 않도록 항상 명시한다. date_from/date_to/group_by 등
+// 화면이 쓰지 않는 파라미터는 추가하지 않는다.
 export function buildSalesOrdersApiQuery(queryState = DEFAULT_SALES_QUERY) {
   const resolved = { ...DEFAULT_SALES_QUERY, ...queryState };
   const page = resolveQueryPage(resolved.page);
@@ -129,48 +72,17 @@ export function buildSalesOrdersApiQuery(queryState = DEFAULT_SALES_QUERY) {
 
   return {
     period: resolved.period,
+    status: 'PAID',
     limit,
     offset,
   };
 }
 
-// API 연결 전 임시: Mock 목록을 페이지 단위로 조회하는 순수 함수. 반환
-// shape은 실제 GET /api/orders 응답과 동일하다 —
-// { items, total, limit, offset, timezone, summary }.
-// summary는 이 페이지의 items가 아니라 선택된 기간 전체 결과를 기준으로
-// 계산해 항상 함께 돌려준다(화면이 별도로 요약을 다시 조회하지 않도록).
-export function queryMockSalesOrders(queryState = DEFAULT_SALES_QUERY) {
-  const resolved = { ...DEFAULT_SALES_QUERY, ...queryState };
-  const filtered = filterOrdersByPeriod(resolved.period);
-
-  const total = filtered.length;
-  const limit = SALES_PAGE_SIZE;
-  const page = resolveQueryPage(resolved.page);
-  const offset = (page - 1) * limit;
-  const items = filtered.slice(offset, offset + limit);
-
-  return {
-    items,
-    total,
-    limit,
-    offset,
-    timezone: SALES_TIMEZONE,
-    summary: computeSummary(filtered),
-  };
-}
-
-// API 연결 전 임시: order_id로 Mock 상세 단건을 조회한다. 목록 item을
-// 상세처럼 확장하거나 mutate하지 않고, sales-mock-data.js가 이미 만들어둔
-// 상세 전용 Mock을 그대로 찾아 돌려준다. 없으면 null.
-export function queryMockSalesOrderDetail(orderId) {
-  return ORDER_DETAIL_BY_ID.get(orderId) ?? null;
-}
-
-// 목록 응답(queryMockSalesOrders의 반환값, 또는 이후 실제 fetch 응답)을
-// 화면 표시용 페이지 메타 정보로 변환한다. response.items를 그대로 쓸 뿐
-// 다시 slice하지 않는다. timezone/summary는 응답 값을 그대로 전달하고,
-// 값이 없으면(예: 방어적 fallback) 각각 SALES_TIMEZONE과 0으로 채운
-// summary를 쓴다.
+// 실제 GET /api/orders 응답을 화면 표시용 페이지 메타 정보로 변환한다.
+// response.items를 그대로 쓸 뿐 다시 정렬·분할하지 않는다. timezone/
+// summary는 응답 값을 그대로 전달하고, 값이 없으면(예: 방어적 fallback)
+// 각각 SALES_TIMEZONE과 0으로 채운 summary를 쓴다 — summary 자체를
+// 페이지 items로부터 재계산하지 않는다.
 export function mapSalesOrdersResponseToPageInfo(response) {
   const items = response?.items ?? [];
   const total =
