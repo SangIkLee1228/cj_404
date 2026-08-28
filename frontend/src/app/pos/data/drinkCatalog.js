@@ -130,18 +130,11 @@ export const DRINK_CATALOG = [
     category: '쉐이크',
     emoji: '🥤',
   },
-  // 음료 (6)
+  // 음료 (6) — 아이스티류(납작복숭아/복숭아/유자그린티) → 에이드류(레몬/자몽) → 차(한라봉차)
   {
     sourceProductId: 17,
     name: '납작복숭아아이스티 제로',
     price: 3900,
-    category: '음료',
-    emoji: '🥤',
-  },
-  {
-    sourceProductId: 32,
-    name: '레몬에이드 레귤러',
-    price: 4500,
     category: '음료',
     emoji: '🥤',
   },
@@ -160,6 +153,13 @@ export const DRINK_CATALOG = [
     emoji: '🥤',
   },
   {
+    sourceProductId: 32,
+    name: '레몬에이드 레귤러',
+    price: 4500,
+    category: '음료',
+    emoji: '🥤',
+  },
+  {
     sourceProductId: 73,
     name: '자몽에이드 레귤러',
     price: 4500,
@@ -173,7 +173,7 @@ export const DRINK_CATALOG = [
     category: '음료',
     emoji: '🥤',
   },
-  // 우유·주스 (5)
+  // 우유·주스 (5) — 우유류(곰돌이푸/뚜레쥬르 우유/초코우유) → 주스류(사과/오렌지)
   {
     sourceProductId: 9,
     name: '곰돌이푸 신선한우유 200ml',
@@ -189,6 +189,13 @@ export const DRINK_CATALOG = [
     emoji: '🧃',
   },
   {
+    sourceProductId: 96,
+    name: '티거의 진한 초코우유 200ml',
+    price: 1600,
+    category: '우유·주스',
+    emoji: '🧃',
+  },
+  {
     sourceProductId: 28,
     name: '뚜레쥬르가 만든 사과주스',
     price: 2700,
@@ -199,13 +206,6 @@ export const DRINK_CATALOG = [
     sourceProductId: 29,
     name: '뚜레쥬르오렌지주스 180ml',
     price: 2700,
-    category: '우유·주스',
-    emoji: '🧃',
-  },
-  {
-    sourceProductId: 96,
-    name: '티거의 진한 초코우유 200ml',
-    price: 1600,
     category: '우유·주스',
     emoji: '🧃',
   },
