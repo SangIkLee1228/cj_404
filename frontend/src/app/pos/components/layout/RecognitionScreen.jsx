@@ -46,19 +46,17 @@ export default function RecognitionScreen({
             </div>
           )}
           <MembershipPanel
-            cartEmpty={activeCart.length === 0}
-            paid={state.payment.paid}
             memberConfirmed={state.membership.memberConfirmed}
             memberName={memberName}
             points={points}
-            onOpenMembership={pos.openMembership}
-            onCancelOrder={onRequestCancel}
           />
           <PaymentArea
             totalCount={totalCount}
             totalAmount={totalAmount}
             paid={state.payment.paid}
             cartEmpty={activeCart.length === 0}
+            memberConfirmed={state.membership.memberConfirmed}
+            onOpenMembership={pos.openMembership}
             onPay={onRequestPayment}
             onNewOrder={pos.newOrder}
           />
@@ -78,9 +76,11 @@ export default function RecognitionScreen({
         <CaptureControls
           hasCaptured={state.capture.hasCaptured}
           paid={state.payment.paid}
+          cartEmpty={activeCart.length === 0}
           onRetake={onRequestRetake}
           onAdd={() => pos.openCaptureScreen('add')}
           onBasic={() => pos.openCaptureScreen('basic')}
+          onCancelOrder={onRequestCancel}
         />
       </aside>
     </main>

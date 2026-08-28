@@ -54,21 +54,13 @@ export default function ProductCatalog({
 
   return (
     <>
-      <div className={`${styles.rightTitle} text-[12px] leading-snug`}>
-        빵·음료 메뉴를 선택해 현재 계산에 직접 추가할 수 있어요
-      </div>
       <div className={styles.catalogShell}>
         <section className={styles.catalogMain}>
           <div className={styles.catalogHead}>
             <div className={styles.catalogTitleWrap}>
-              <b className="text-[15px] font-extrabold tracking-tight">
+              <b className="text-[16px] font-bold">
                 {isDrink ? '음료 상품' : '빵 상품'}
               </b>
-              <span
-                className={`${styles.catalogHelp} text-[11px] leading-snug`}
-              >
-                상품 사진을 눌러 계산에 추가
-              </span>
             </div>
             <div className={styles.manualTools} aria-label="상품 종류 선택">
               <button
@@ -76,14 +68,14 @@ export default function ProductCatalog({
                 className={`${styles.manualBtn} ${!isDrink ? styles.active : ''}`}
                 onClick={() => onSetType('bread')}
               >
-                <span>＋</span>빵
+                빵
               </button>
               <button
                 type="button"
                 className={`${styles.manualBtn} ${isDrink ? styles.active : ''}`}
                 onClick={() => onSetType('drink')}
               >
-                <span>＋</span>음료
+                음료
               </button>
             </div>
           </div>
@@ -92,10 +84,9 @@ export default function ProductCatalog({
               <button
                 key={c}
                 type="button"
-                className={`${styles.categoryBtn} text-[11px] font-semibold tracking-tight max-[1380px]:text-[9px] ${category === c ? styles.active : ''}`}
+                className={`${styles.categoryBtn} text-[10px] font-semibold tracking-tight max-[1380px]:text-[9px] ${category === c ? styles.active : ''}`}
                 onClick={() => onSetCategory(c)}
               >
-                {category === c ? '✓ ' : ''}
                 {c}
               </button>
             ))}
@@ -112,10 +103,6 @@ export default function ProductCatalog({
             ))}
           </div>
         </section>
-      </div>
-      <div className={styles.rightNote}>
-        ※ 직접 추가 상품도 결제 완료 시 판매·재고 반영 흐름에 동일하게
-        포함됩니다.
       </div>
     </>
   );

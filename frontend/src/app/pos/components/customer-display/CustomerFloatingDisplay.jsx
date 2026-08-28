@@ -3,11 +3,11 @@ import styles from '../../pos.module.css';
 import PhoneKeypad from '../membership/PhoneKeypad';
 import { formatWon } from '../../helpers/formatters';
 
-const FRAME_WIDTH = 390;
-const FRAME_HEIGHT = 624;
+const FRAME_WIDTH = 415;
+const FRAME_HEIGHT = 664;
 
 /**
- * 고객용 Floating Display — 항상 390×624 고정, 직원 상태를 구독하는 표시 전용 파생 뷰다.
+ * 고객용 Floating Display — 항상 415×664 고정, 직원 상태를 구독하는 표시 전용 파생 뷰다.
  * 조작 지점은 CJ ONE 번호 입력(PhoneKeypad)과, 헤더를 잡고 위치를 옮기는 드래그뿐이다.
  * Pointer Capture를 헤더 요소 자체에 거는 방식이라 document 레벨 리스너를 추가/해제할 필요가 없다.
  */
@@ -163,15 +163,11 @@ export default function CustomerFloatingDisplay({ pos }) {
             <div>
               {visibleItems.map((item) => (
                 <div className={styles.customerItem} key={item.name}>
-                  <div className={styles.customerItemMain}>
-                    <span className={styles.customerThumb}>
-                      {item.emoji || '🥐'}
-                    </span>
-                    <b>
-                      {item.name} × {item.qty}
-                    </b>
-                  </div>
-                  <span>{formatWon(item.price * item.qty)}</span>
+                  <b className={styles.customerItemName}>{item.name}</b>
+                  <span className={styles.customerItemQty}>{item.qty}</span>
+                  <span className={styles.customerItemAmount}>
+                    {formatWon(item.price * item.qty)}
+                  </span>
                 </div>
               ))}
               {activeCart.length > 4 && (

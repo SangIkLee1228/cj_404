@@ -18,7 +18,7 @@ export default function ConfirmModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(42, 35, 28, 0.45)',
+        background: 'rgba(15, 23, 42, 0.45)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -27,16 +27,22 @@ export default function ConfirmModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className={styles.phoneModal} style={{ maxWidth: 360 }}>
-        <div className={styles.modalTitle}>{title}</div>
-        <div className={styles.phoneHint} style={{ margin: '0 0 16px' }}>
-          {description}
-        </div>
-        <div className={styles.modalActions}>
-          <button type="button" className={styles.cancel} onClick={onCancel}>
+      <div className={styles.confirmModal}>
+        <div className={styles.confirmModalTitle}>{title}</div>
+        <div className={styles.confirmModalDesc}>{description}</div>
+        <div className={styles.confirmModalActions}>
+          <button
+            type="button"
+            className={styles.confirmModalCancel}
+            onClick={onCancel}
+          >
             {cancelLabel}
           </button>
-          <button type="button" className={styles.confirm} onClick={onConfirm}>
+          <button
+            type="button"
+            className={styles.confirmModalConfirm}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </button>
         </div>

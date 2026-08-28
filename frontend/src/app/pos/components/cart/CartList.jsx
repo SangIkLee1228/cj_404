@@ -40,7 +40,6 @@ export default function CartList({
             {item.belowThreshold && (
               <div className={styles.reviewBar} aria-hidden="true" />
             )}
-            <div className={styles.scanIcon}>▣</div>
             <div>
               <div className={styles.scanName}>
                 {item.name}
@@ -51,29 +50,28 @@ export default function CartList({
                   <span className={styles.reviewBadge}>확인 필요</span>
                 )}
               </div>
-              <div className={styles.scanSub}>
-                {formatWon(item.price)}
-                {remaining !== Infinity ? ` · 재고 ${remaining}개` : ''}
-              </div>
+              <div className={styles.scanSub}>{formatWon(item.price)}</div>
             </div>
-            <button
-              type="button"
-              className={styles.qtyBtn}
-              onClick={() => onChangeQty(item.name, -1)}
-              aria-label={`${item.name} 수량 감소`}
-            >
-              −
-            </button>
-            <div className={styles.qty}>{item.qty}</div>
-            <button
-              type="button"
-              className={styles.qtyBtn}
-              disabled={plusDisabled}
-              onClick={() => onChangeQty(item.name, 1)}
-              aria-label={`${item.name} 수량 증가`}
-            >
-              ＋
-            </button>
+            <div className={styles.qtyStepper}>
+              <button
+                type="button"
+                className={styles.qtyBtn}
+                onClick={() => onChangeQty(item.name, -1)}
+                aria-label={`${item.name} 수량 감소`}
+              >
+                −
+              </button>
+              <div className={styles.qty}>{item.qty}</div>
+              <button
+                type="button"
+                className={styles.qtyBtn}
+                disabled={plusDisabled}
+                onClick={() => onChangeQty(item.name, 1)}
+                aria-label={`${item.name} 수량 증가`}
+              >
+                ＋
+              </button>
+            </div>
             <div className={styles.scanPrice}>
               {formatWon(item.price * item.qty)}
             </div>
