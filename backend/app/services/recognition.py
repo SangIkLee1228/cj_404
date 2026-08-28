@@ -24,6 +24,18 @@ SIGNED_URL_TTL_SECONDS = 600   # 모델이 곧바로 받아가므로 10분이면
 
 UNMATCHED_LABEL = "__UNMATCHED__"   # 명세서 4.4: 매칭 실패 시 이 값, product_id는 NULL
 
+# 모델 서버 전용 HTTP 클라이언트. 촬영마다 httpx.post()를 새로 부르면 ngrok까지
+# TLS 핸드셰이크를 매번 다시 한다 - 실측으로 왕복 335ms vs 재사용 76ms였다.
+# 인식 시간의 15%를 연결 수립에만 쓰는 셈이라 커넥션을 살려둔다.
+#
+# ngrok 무료 도메인이 브라우저 UA에 경고 페이지를 끼워 넣는다. httpx는 해당되지
+# 않지만, 에이전트 설정이 바뀌어도 안 깨지게 박아둔다.
+#
+# 요청 timeout은 클라이언트가 아니라 호출 시점에 준다 - 여기 박아두면 설정을
+# 바꿔도 프로세스를 다시 띄우기 전까지 옛 값이 남는다.
+# httpx.Client는 스레드 안전하다(동기 라우트는 threadpool에서 돈다).
+_MODEL_CLIENT = httpx.Client(headers={"ngrok-skip-browser-warning": "true"})
+
 # 데모 이미지 목록 조회 상한. 시연용 트레이 사진이 100장을 넘길 일은 없고,
 # storage3의 기본 limit도 100이라 그대로 맞췄다.
 DEMO_LIST_LIMIT = 100
@@ -149,13 +161,10 @@ def call_detect(image_url: str) -> dict:
     base = settings.model_api_url.rstrip("/")
 
     try:
-        response = httpx.post(
+        response = _MODEL_CLIENT.post(
             f"{base}/detect",
             json={"image_url": image_url},
             timeout=settings.model_api_timeout,
-            # ngrok 무료 도메인이 브라우저 UA에 경고 페이지를 끼워 넣는다.
-            # httpx는 해당되지 않지만, 에이전트 설정이 바뀌어도 안 깨지게 박아둔다.
-            headers={"ngrok-skip-browser-warning": "true"},
         )
     except httpx.TimeoutException as exc:
         raise RecognitionError("TIMEOUT", str(exc)) from exc

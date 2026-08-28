@@ -283,6 +283,9 @@
 .topbarSubtitle {
   font-size: 11px;
   color: var(--dashboard-color-text-muted);
+  /* 매초 갱신되는 시계다. 자릿수마다 폭이 달라지면 글자가 흔들려 보이므로
+     고정폭 숫자를 쓴다. */
+  font-variant-numeric: tabular-nums;
 }
 
 .topbarActions {
@@ -290,6 +293,25 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* 데이터 동기화 진행 중 새로고침 아이콘 회전.
+   prefers-reduced-motion 환경에서는 회전을 끄고, 대신 라벨('동기화 중…')과
+   disabled 상태가 진행 여부를 알린다. */
+.topbarSyncSpinner {
+  animation: topbarSyncSpin 900ms linear infinite;
+}
+
+@keyframes topbarSyncSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbarSyncSpinner {
+    animation: none;
+  }
 }
 
 .topbarStatus {
@@ -303,6 +325,7 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--dashboard-color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .topbarStatusDot {

@@ -30,6 +30,10 @@ services:
       # 환경변수나 저장소 루트의 .env로 덮으면 된다(backend/.env가 아니다).
       - MODEL_API_URL=${MODEL_API_URL:-https://crane-cancel-city.ngrok-free.dev}
       - DEMO_SCAN_IMAGE_BUCKET=${DEMO_SCAN_IMAGE_BUCKET:-test}
+      # 명세서 4.4의 계약값은 30초지만 시연 스택에서는 10초로 줄인다. 정상 추론이
+      # 실측 1.0~3.7초라 2.7배 여유가 남고, 모델이 죽었을 때 30초씩 기다리지 않고
+      # "직접 추가" 안내로 넘어갈 수 있다. 코드 기본값(config.py)은 30 그대로다.
+      - MODEL_API_TIMEOUT=${MODEL_API_TIMEOUT:-10}
     ports:
       - "8000:8000" # direct access for /api/docs (Swagger UI); remove in production
     restart: unless-stopped
