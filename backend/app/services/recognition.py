@@ -24,6 +24,13 @@ SIGNED_URL_TTL_SECONDS = 600   # 모델이 곧바로 받아가므로 10분이면
 
 UNMATCHED_LABEL = "__UNMATCHED__"   # 명세서 4.4: 매칭 실패 시 이 값, product_id는 NULL
 
+# 데모 이미지 목록 조회 상한. 시연용 트레이 사진이 100장을 넘길 일은 없고,
+# storage3의 기본 limit도 100이라 그대로 맞췄다.
+DEMO_LIST_LIMIT = 100
+
+# 데모 버킷 루트에서 사진으로 인정할 확장자.
+_IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
+
 # ngrok 오류 코드 → failure_reason. 둘 다 "Mac을 확인하라"는 뜻이지만 할 일이 다르다.
 #   3200: 에이전트가 ngrok에 연결돼 있지 않다 (절전 / ngrok 종료 / 네트워크 끊김)
 #   8012: 터널은 살아 있는데 에이전트가 Mac 안의 모델 서버에 못 닿는다 (서버 미기동)
@@ -58,6 +65,28 @@ def sign(path: str, bucket: str | None = None) -> str:
     )["signedURL"]
 
 
+def _demo_image_paths(bucket: str) -> list[str]:
+    """데모 버킷 **루트**의 이미지 경로 목록.
+
+    파일 목록을 설정에 박아두지 않고 매번 조회한다 - Storage에 사진을 올리거나
+    지우면 곧바로 시연에 반영되고, .env 수정 + 컨테이너 재생성이 필요 없다.
+
+    루트만 본다(비재귀). 하위 폴더는 id가 없는 항목으로 내려오므로 걸러지며,
+    덕분에 원본 보관용 폴더를 같은 버킷에 둬도 시연 대상에 섞이지 않는다.
+    Supabase가 빈 폴더에 만들어 두는 .emptyFolderPlaceholder도 확장자에서 걸린다.
+
+    Storage가 이미 이름순으로 주지만 파이썬에서 한 번 더 정렬한다. 사진 선택이
+    len(paths)에 대한 나머지 연산이라 목록 순서가 흔들리면 같은 주문인데 촬영할
+    때마다 다른 사진이 나온다 - 서버 응답 순서에 기대면 안 되는 이유다.
+    """
+    entries = get_supabase().storage.from_(bucket).list("", {"limit": DEMO_LIST_LIMIT})
+    return sorted(
+        entry["name"]
+        for entry in entries
+        if entry.get("id") and entry["name"].lower().endswith(_IMAGE_SUFFIXES)
+    )
+
+
 def resolve_image_url(session: dict) -> str:
     """이 세션에 대해 모델에 넘길 signed URL을 만든다.
 
@@ -65,18 +94,24 @@ def resolve_image_url(session: dict) -> str:
     저장해두면 나중에 못 쓴다). 그래서 호출 직전에 새로 서명한다.
 
     경로가 비어 있으면 = 카메라 없이 촬영 버튼만 누른 시연 흐름이다. 이때는
-    DEMO_SCAN_IMAGE_PATHS에 등록해 둔 이미지를 대신 쓴다. 설정이 없으면 실패다 —
-    조용히 넘어가면 "왜 인식이 안 되지"를 화면만 보고 알 수 없다.
+    DEMO_SCAN_IMAGE_BUCKET 루트에 올라와 있는 이미지를 대신 쓴다. 버킷 설정이
+    없거나 버킷이 비어 있으면 실패다 - 조용히 넘어가면 "왜 인식이 안 되지"를
+    화면만 보고 알 수 없다.
     """
     path = session.get("image_url")
     if path:
         return sign(path)
 
-    settings = get_settings()
-    demo = settings.demo_scan_image_list
+    bucket = get_settings().demo_scan_image_bucket
+    if not bucket:
+        raise RecognitionError(
+            "NO_IMAGE", "촬영 이미지가 없고 DEMO_SCAN_IMAGE_BUCKET도 비어 있습니다"
+        )
+
+    demo = _demo_image_paths(bucket)
     if not demo:
         raise RecognitionError(
-            "NO_IMAGE", "촬영 이미지가 없고 DEMO_SCAN_IMAGE_PATHS도 비어 있습니다"
+            "NO_IMAGE", f"촬영 이미지가 없고 {bucket} 버킷 루트에도 이미지가 없습니다"
         )
 
     # 어떤 사진을 고를지는 **주문 기준**이다. 세션 기준으로 고르면 다시 촬영할 때마다
@@ -98,7 +133,7 @@ def resolve_image_url(session: dict) -> str:
     else:
         index = base
 
-    return sign(demo[index], settings.demo_scan_image_bucket or None)
+    return sign(demo[index], bucket)
 
 
 def call_detect(image_url: str) -> dict:

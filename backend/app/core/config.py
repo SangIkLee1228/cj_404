@@ -38,15 +38,15 @@ class Settings(BaseSettings):
     # (모델은 0~1로 주므로 recognition.py가 100을 곱한 뒤 비교한다).
     ai_confidence_threshold: float = 70.0
 
-    # 시연용: 카메라 없이 "촬영"했을 때(image_url이 NULL) 대신 추론할 이미지.
-    # 버킷을 따로 두는 이유는 테스트 이미지가 supabase_storage_bucket이 아닌
-    # 별도 버킷에 올라가 있기 때문이다. 쉼표로 여러 장을 주면 세션마다 돌아가며 쓴다.
+    # 시연용: 카메라 없이 "촬영"했을 때(image_url이 NULL) 대신 추론할 이미지가 담긴
+    # 버킷. 버킷을 따로 두는 이유는 테스트 이미지가 supabase_storage_bucket이 아닌
+    # 별도 버킷에 올라가 있기 때문이다.
+    #
+    # 파일 목록은 설정으로 받지 않고 호출 때마다 이 버킷 **루트**를 조회한다
+    # (recognition.py::_demo_image_paths). Storage에 사진을 올리거나 지우면 그대로
+    # 반영되므로, 장수가 바뀔 때마다 .env를 고치고 컨테이너를 다시 만들 필요가 없다.
+    # 비워두면 이미지 없는 세션은 failure_reason="NO_IMAGE"로 실패한다.
     demo_scan_image_bucket: str = ""
-    demo_scan_image_paths: str = ""
-
-    @property
-    def demo_scan_image_list(self) -> list[str]:
-        return [p.strip() for p in self.demo_scan_image_paths.split(",") if p.strip()]
 
     # AUTH_DISABLED=true 일 때 서버가 사용하는 시드 고정값 (DB 설계서 v1.4 · 7장)
     dev_store_id: int = 1

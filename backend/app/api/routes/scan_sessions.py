@@ -350,10 +350,13 @@ def recognize_scan_session(
     ).execute()
 
     # 모델 호출 구간만 계측한다. NFR-01(3초 이내)이 재는 대상이 이 왕복이기 때문이다.
+    # 이미지 준비(데모 버킷 조회 + 서명)는 타이머 밖이다 - 우리 쪽 Storage 왕복이라
+    # 모델 응답 시간에 섞이면 NFR-01 수치가 실제보다 나빠 보인다.
     image_url: str | None = None
     started = time.perf_counter()
     try:
         image_url = resolve_image_url(session)
+        started = time.perf_counter()
         data = call_detect(image_url)
     except RecognitionError as exc:
         logger.warning("scan.model_error", reason=exc.reason, detail=exc.detail)

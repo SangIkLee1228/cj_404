@@ -20,6 +20,16 @@ services:
       - ./backend/.env
     environment:
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-https://localhost}
+      # AI 추론 서버 주소와 시연 이미지 버킷은 비밀이 아니라 팀 공용 값인데,
+      # backend/.env가 gitignore라 PC마다 손으로 채워야 했다. 빠지면 촬영이
+      # 501("AI 인식 서버가 아직 연결되지 않았습니다") 또는 NO_IMAGE로 끝난다.
+      # 여기에 기본값을 두면 clone 직후에도 그대로 돌아간다.
+      #
+      # compose의 environment는 env_file보다 우선하므로, 팀원 .env에 남아 있는
+      # 옛 자리표시자까지 덮어쓴다. 개인적으로 다른 모델 서버를 붙이려면 셸
+      # 환경변수나 저장소 루트의 .env로 덮으면 된다(backend/.env가 아니다).
+      - MODEL_API_URL=${MODEL_API_URL:-https://crane-cancel-city.ngrok-free.dev}
+      - DEMO_SCAN_IMAGE_BUCKET=${DEMO_SCAN_IMAGE_BUCKET:-test}
     ports:
       - "8000:8000" # direct access for /api/docs (Swagger UI); remove in production
     restart: unless-stopped
