@@ -47,6 +47,7 @@ export default function PosPage() {
   useKeyboardShortcuts({
     screen: pos.state.capture.screen,
     isShooting: pos.isShooting,
+    hasCaptured: pos.state.capture.hasCaptured,
     cartEmpty: pos.activeCart.length === 0,
     paid: pos.state.payment.paid,
     anyModalOpen,
@@ -107,7 +108,7 @@ export default function PosPage() {
       {pendingConfirm === 'retake' && (
         <ConfirmModal
           title="다시 촬영"
-          description="지금까지 AI로 인식된 항목이 사라지고 새로 촬영한 결과로 바뀝니다. 직접 추가한 항목은 유지됩니다."
+          description="지금까지 담긴 항목이 모두 사라지고 새로 촬영한 결과로 바뀝니다. 직접 추가한 항목도 함께 사라집니다."
           confirmLabel="다시 촬영"
           onConfirm={confirmAction}
           onCancel={closeConfirm}

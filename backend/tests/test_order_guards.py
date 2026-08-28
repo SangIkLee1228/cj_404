@@ -76,7 +76,7 @@ def _recalc_env(monkeypatch, updated_rows):
     monkeypatch.setattr(svc, "get_supabase", lambda: _client(sink, updated_rows))
     monkeypatch.setattr(svc, "load_items", lambda oid: [
         {"quantity": 1, "unit_price": 3200, "product_id": 9}])
-    monkeypatch.setattr(svc, "load_grade_rates", lambda gid: (0, 0))
+    monkeypatch.setattr(svc, "load_point_earn_rate", lambda gid: 0)
     return sink
 
 

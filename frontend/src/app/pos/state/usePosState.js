@@ -16,6 +16,7 @@ import { getProducts, getRecommendations } from '../api/productsApi';
 import { getInventory } from '../api/inventoryApi';
 import {
   createScanSession,
+  discardScanSession,
   recognizeScanSession,
 } from '../api/scanSessionsApi';
 import { ApiError } from '../api/httpClient';
@@ -27,6 +28,28 @@ import {
 import { filterAndOrderBreadProducts } from '../data/allowedBreadProducts';
 
 const initialCapture = { mode: 'basic', screen: 'recognition' };
+
+/**
+ * recognize가 status='FAILED'로 돌려주는 failure_reason별 안내 문구.
+ * 인식 실패는 HTTP 오류가 아니라 정상 응답이므로(API명세서 4.4) 화면을 막지 않고
+ * "직접 추가로 진행"을 안내한다 — 계산은 계속 이어질 수 있어야 한다.
+ */
+const FAILURE_MESSAGE = {
+  NO_IMAGE:
+    '추론할 이미지가 없습니다. DEMO_SCAN_IMAGE_PATHS 설정을 확인해주세요.',
+  TIMEOUT: 'AI 인식이 시간 안에 끝나지 않았습니다. 직접 추가로 진행해주세요.',
+  MODEL_UNREACHABLE:
+    'AI 서버에 연결할 수 없습니다. 터널 상태를 확인하거나 직접 추가로 진행해주세요.',
+  // 아래 둘은 우리 서버가 아니라 Mac 쪽을 봐야 하는 상황이다. 원인을 뭉뚱그리면
+  // 엉뚱한 곳을 디버깅하게 되므로 무엇을 확인해야 하는지까지 적는다.
+  TUNNEL_OFFLINE:
+    'AI 서버 터널이 꺼져 있습니다(ngrok 미실행). 담당자에게 확인 요청 후 직접 추가로 진행해주세요.',
+  MODEL_DOWN:
+    'AI 모델 서버가 실행 중이 아닙니다. 담당자에게 확인 요청 후 직접 추가로 진행해주세요.',
+  TUNNEL_ERROR: 'AI 서버 터널에 문제가 있습니다. 직접 추가로 진행해주세요.',
+  MODEL_ERROR: 'AI 서버가 오류를 반환했습니다. 직접 추가로 진행해주세요.',
+  CANCELLED_BY_STAFF: '촬영을 취소했습니다.',
+};
 const initialMembership = {
   phone: '010',
   phoneOverlayOpen: false,
@@ -94,6 +117,13 @@ export function usePosState() {
   const [initializing, setInitializing] = useState(true);
   const [capture, setCapture] = useState(initialCapture);
   const [hasCaptured, setHasCaptured] = useState(false);
+  // 마지막 인식 결과 — 실제로 추론한 사진과 bbox. 장바구니(orderRaw)와 별개로
+  // 들고 있는 이유는, 주문 항목은 상품별로 합산되지만 화면의 박스는 탐지 1건마다
+  // 하나씩 그려야 하기 때문이다(꽈배기 3개 = 항목 1줄, 박스 3개).
+  const [scanResult, setScanResult] = useState(null);
+  // 다시 촬영이 폐기할 대상. 명세서 3장이 "discard로 주문 항목을 비운 뒤 RETAKE로
+  // 다시 촬영"이라고 정하고 있어서 직전 세션 ID를 들고 있어야 한다.
+  const [lastScanSessionId, setLastScanSessionId] = useState(null);
   const [membership, setMembership] = useState(initialMembership);
   const [paymentFailed, setPaymentFailed] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
@@ -131,8 +161,18 @@ export function usePosState() {
     }
   }, []);
 
-  // 최초 진입: 진행 중 주문 복구(없으면 생성) + BREAD 카탈로그 + 재고를 불러온다.
+  // 최초 진입: **항상 빈 계산으로 시작한다** + BREAD 카탈로그 + 재고를 불러온다.
   // DRINK는 backend를 전혀 부르지 않는다(DRINK_CATALOG는 정적 import).
+  //
+  // 예전에는 GET /orders/current로 진행 중 주문을 복구했다(명세서 4.5의 세션 복구).
+  // 그러면 앞 손님 항목을 지우지 않고 화면을 나간 경우, 다음에 접속한 직원의 계산에
+  // 그 항목이 그대로 얹힌 채로 시작된다 - 못 보고 결제하면 금액이 틀린다.
+  // 남아 있던 계산은 취소하고(CANCELLED, 재고·매출에는 영향 없음) 새로 시작한다.
+  //
+  // 항목이 있을 때만 취소하는 이유가 두 가지다.
+  //   1) 빈 PENDING 주문은 POST /orders가 멱등하게 재사용하므로 취소할 게 없다.
+  //   2) 개발 모드의 StrictMode는 이 effect를 두 번 실행한다. 무조건 취소하면
+  //      1회차가 만든 주문을 2회차가 곧바로 취소해 CANCELLED 쓰레기가 쌓인다.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -142,7 +182,11 @@ export function usePosState() {
           getProducts('BREAD'),
         ]);
         if (cancelled) return;
-        const order = current || (await createOrder());
+        if (current?.items?.length) {
+          await cancelOrderApi(current.order_id);
+          if (cancelled) return;
+        }
+        const order = await createOrder();
         if (cancelled) return;
         setOrderId(order.order_id);
         setOrderRaw(order);
@@ -333,6 +377,8 @@ export function usePosState() {
     setMembership(initialMembership);
     setPaymentFailed(false);
     setHasCaptured(false);
+    setScanResult(null);
+    setLastScanSessionId(null);
     setLocalDrinkItems([]);
     setDrinkPaid(false);
   }, []);
@@ -465,38 +511,107 @@ export function usePosState() {
     setCapture((c) => ({ ...c, screen: 'recognition' }));
   }, []);
 
-  // AI 추론 서버는 아직 연결 전이라(명세서 5.4, 항상 501) 실제 이미지 업로드 없이
-  // 세션만 만들고 recognize를 호출해 "미연결" 안내로 이어지는 FR-10 경로를 그대로 탄다.
-  // (AI/촬영은 BREAD 전용 개념이며 이번 작업 대상이 아니다 — 그대로 둔다.)
+  // 촬영 → AI 인식 → 주문 반영 (FR-01/02).
+  //
+  // 카메라 하드웨어가 없는 시연 환경이라 이미지를 업로드하지 않는다. image_path 없이
+  // 세션을 만들면 backend가 DEMO_SCAN_IMAGE_PATHS의 Storage 이미지를 대신 추론한다.
+  // 카메라를 붙일 때는 여기서 uploadImage()를 먼저 부르고 image_path만 넘기면 되며,
+  // 그 아래 흐름(인식 → 반영 → 표시)은 그대로 쓴다.
+  //
+  // 다시 촬영은 새 세션을 만들기 **전에** 직전 세션을 폐기한다(명세서 3장 분기표).
+  // 이게 빠져 있으면 recognize가 같은 product_id를 기존 항목에 합산해서, 트레이를
+  // 다시 찍었을 뿐인데 수량이 두 배가 된다.
   const shoot = useCallback(() => {
     if (isShooting) return;
     setIsShooting(true);
     const runId = ++captureRunRef.current;
+    const isRetake = capture.mode === 'retake';
+
     (async () => {
+      let orderTouched = false; // 주문을 건드렸으면 실패해도 장바구니를 다시 읽어야 한다
       try {
+        if (isRetake && lastScanSessionId !== null) {
+          await discardScanSession(lastScanSessionId);
+          orderTouched = true;
+          if (captureRunRef.current !== runId) return;
+          setScanResult(null); // 이전 촬영 사진·박스를 먼저 지운다
+        }
+
         const session = await createScanSession({
           orderId,
           captureType: capture.mode.toUpperCase(),
         });
+        setLastScanSessionId(session.scan_session_id);
+
         const result = await recognizeScanSession(session.scan_session_id);
         if (captureRunRef.current !== runId) return; // 화면을 벗어났으면 결과를 버린다.
         setHasCaptured(true);
+
+        // MODEL_API_URL 미설정 = 아직 서버를 안 붙인 상태. 예전 동작 그대로 둔다.
         if (result?.notImplemented) {
           showToast(
             'AI 인식 서버가 아직 연결되지 않았습니다. 직접 추가로 진행해주세요.'
           );
+          return;
         }
+
+        // 인식 실패도 HTTP 200으로 온다 — 사진은 띄우되 박스만 비운다.
+        if (result?.status === 'FAILED') {
+          setScanResult({ imageUrl: result.image_url ?? null, detections: [] });
+          showToast(
+            FAILURE_MESSAGE[result.failure_reason] ??
+              '인식에 실패했습니다. 직접 추가로 진행해주세요.'
+          );
+          return;
+        }
+
+        orderTouched = true; // recognize가 order_item(AI_DETECTED)에 반영했다
+        const detections = (result?.detected_items ?? []).map((item) => ({
+          id: item.detected_item_id,
+          // 매칭 실패 건은 product_name이 없다. 박스는 그리되 이름은 물음표로 둔다.
+          name: item.product_name ?? '알 수 없음',
+          bbox: item.bbox,
+          belowThreshold: item.is_below_threshold,
+        }));
+        setScanResult({ imageUrl: result?.image_url ?? null, detections });
+
+        showToast(
+          detections.length > 0
+            ? `${detections.length}개를 인식했습니다.`
+            : '인식된 빵이 없습니다. 직접 추가해주세요.'
+        );
       } catch (err) {
         if (captureRunRef.current !== runId) return;
         showToast(err?.message || '촬영 처리에 실패했습니다.');
       } finally {
+        // 장바구니·금액은 orderRaw에서 나오므로 주문을 다시 읽어야 화면에 반영된다.
+        // 실패 경로에서도 읽는 이유: 다시 촬영은 이미 discard로 항목을 비운 뒤라,
+        // 여기서 건너뛰면 지워진 항목이 화면에만 남는다.
+        if (orderTouched && captureRunRef.current === runId) {
+          try {
+            const fresh = await getOrder(orderId);
+            if (captureRunRef.current === runId) {
+              setOrderRaw(fresh);
+              await refreshInventory();
+            }
+          } catch {
+            // 재조회 실패는 이미 뜬 안내를 덮지 않는다 — 다음 조작에서 다시 맞춰진다.
+          }
+        }
         if (captureRunRef.current === runId) {
           setIsShooting(false);
           setCapture((c) => ({ ...c, screen: 'recognition' }));
         }
       }
     })();
-  }, [isShooting, orderId, capture.mode, showToast]);
+  }, [
+    isShooting,
+    orderId,
+    capture.mode,
+    lastScanSessionId,
+    refreshInventory,
+    showToast,
+  ]);
 
   const setCatalogType = useCallback((productType) => {
     setCatalogFilter({ productType, category: '전체' });
@@ -544,6 +659,7 @@ export function usePosState() {
     setCatalogCategory,
     shoot,
     isShooting,
+    scanResult,
     removeItem,
   };
 }

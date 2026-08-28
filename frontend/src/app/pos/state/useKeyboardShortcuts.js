@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 export function useKeyboardShortcuts({
   screen,
   isShooting,
+  hasCaptured,
   cartEmpty,
   paid,
   anyModalOpen,
@@ -45,7 +46,9 @@ export function useKeyboardShortcuts({
       if (e.key === ' ' && e.target === document.body) {
         if (screen === 'shooting') {
           if (!isShooting) shoot();
-        } else if (screen === 'recognition' && !paid) {
+        } else if (screen === 'recognition' && !paid && !hasCaptured) {
+          // 버튼과 같은 조건이다. 여기를 열어두면 촬영 후 Space가 기본 촬영을
+          // 다시 열어, 비활성화한 버튼을 단축키로 우회하게 된다.
           openBasicCapture();
         }
         e.preventDefault();
@@ -77,6 +80,7 @@ export function useKeyboardShortcuts({
   }, [
     screen,
     isShooting,
+    hasCaptured,
     cartEmpty,
     paid,
     anyModalOpen,

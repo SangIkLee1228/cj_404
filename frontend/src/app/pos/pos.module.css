@@ -142,8 +142,12 @@
 
 /* 트레이 인식 영역 */
 .camera {
-  height: clamp(300px, 35vh, 390px);
-  flex: 0 0 clamp(300px, 35vh, 390px);
+  /* 사진 크기를 결정하는 건 이 높이다. 트레이 사진이 4:3이라 프레임이 아무리
+     가로로 길어도 세로에 막혀 더 커지지 않는다 — 좌우 여백을 줄이고 싶으면
+     너비가 아니라 이 값을 키워야 한다. 계산 목록(.scanList)이 밀리므로
+     min-height 150px을 침범하지 않는 선에서 올렸다. */
+  height: clamp(310px, 40vh, 430px);
+  flex: 0 0 clamp(310px, 40vh, 430px);
   background: linear-gradient(180deg, #f2e6d8 0%, #efe0cf 100%);
   border-radius: 20px;
   position: relative;
@@ -219,16 +223,55 @@
   transform: translateY(-50%);
   background: linear-gradient(145deg, #c89f80, #ae7e5c);
 }
+/* 실제로 추론한 사진을 띄우는 영역.
+   scanImageWrap이 렌더된 이미지 크기에 정확히 shrink-wrap 되어야 bbox(%)가
+   사진 위 올바른 자리에 앉는다. 레터박스 여백은 scanFrame이 흡수한다. */
+.scanFrame {
+  position: absolute;
+  inset: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 크기의 출처는 .scanFrame 하나뿐이어야 한다.
+   이전에는 이미지에 max-height: 33vh, wrap에 max-height: 100%(=프레임 높이)로
+   서로 다른 두 값을 걸어놨었다. 뷰포트에 따라 두 값이 어긋나면서
+     - 이미지가 프레임보다 커져 .camera의 overflow:hidden에 잘리고
+     - 박스의 기준 상자(wrap)와 실제 이미지 높이가 달라져 bbox가 세로로 밀렸다.
+   지금은 wrap이 프레임 높이를 그대로 받고, 이미지가 그 높이에 맞춰 비율대로
+   늘어나며, wrap은 flex 아이템이라 이미지 너비만큼만 차지한다 → wrap == 이미지. */
+.scanImageWrap {
+  position: relative;
+  height: 100%;
+  line-height: 0; /* img 아래 baseline 여백이 생기면 박스가 그만큼 밀린다 */
+}
+.scanImage {
+  display: block;
+  height: 100%;
+  width: auto; /* 세로를 채우고 가로는 비율대로. 프레임보다 가로로 긴 파노라마
+                  (약 2.7:1 이상)만 좌우가 잘리는데, 트레이 사진은 4:3이라 해당 없다 */
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(88, 67, 47, 0.16);
+}
+
 .bbox {
   position: absolute;
   border: 2px solid #0c5f4b;
   border-radius: 8px;
   z-index: 3;
 }
+/* 임계값 미만 = 확인 필요. 수치는 노출하지 않고 색으로만 구분한다. */
+.bboxReview {
+  border-color: #c2610f;
+  border-style: dashed;
+}
+.bboxReview .tag {
+  background: #c2610f;
+}
 .bbox .tag {
   position: absolute;
   left: 0;
-  top: -25px;
+  top: 0;
   background: #0c5f4b;
   color: white;
   border-radius: 7px;
@@ -1534,8 +1577,8 @@
 
 @media (max-height: 820px) {
   .camera {
-    height: clamp(270px, 34vh, 310px);
-    flex-basis: clamp(270px, 34vh, 310px);
+    height: clamp(280px, 38vh, 350px);
+    flex-basis: clamp(280px, 38vh, 350px);
   }
   .scanList {
     min-height: 126px;

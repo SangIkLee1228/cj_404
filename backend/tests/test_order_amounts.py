@@ -7,15 +7,16 @@
 import math  # float의 실제 동작을 대조하는 테스트에서만 쓴다
 from decimal import Decimal
 
-from app.services.orders import Amounts, compute_amounts, line_subtotal, money, order_detail
+from app.services.orders import compute_amounts, line_subtotal, money, order_detail
 
 #    └ pyproject.toml의 pythonpath = ["."] 덕분에 backend/ 기준 절대경로로 import된다.
 #      pytest가 tests/ 안에서 실행돼도 app 패키지를 찾는 이유.
 
-FAMILY_DISCOUNT_RATE = Decimal("0.0100")
 POINT_EARN_RATE = Decimal("0.0050")
-# └ 매직넘버를 테스트 본문에 흩뿌리지 않는다. 등급 비율이 바뀌면 여기 두 줄만 고치면 된다.
-#   Decimal("0.0100") 처럼 문자열로 쓰는 게 중요 — Decimal(0.01)은 float 오차를 물려받는다.
+# └ 매직넘버를 테스트 본문에 흩뿌리지 않는다. 적립률이 바뀌면 여기 한 줄만 고치면 된다.
+#   Decimal("0.0050") 처럼 문자열로 쓰는 게 중요 — Decimal(0.005)는 float 오차를 물려받는다.
+#
+# 등급 할인율 상수는 없다. CJ ONE 연동은 적립 전용이고 할인은 존재하지 않는다.
 
 
 def test_money_accepts_both_string_and_float():
@@ -49,39 +50,51 @@ def test_gross_is_sum_of_lines():
 #     기본값이 Decimal("0")인데 실수로 None이 되면 여기서 잡힌다.
 
 
-def test_matches_spec_example_exactly():
-    """
-    명세서 4.5의 예시 응답 숫자를 그대로 재현한다.
-    gross 11100 -> 1% 할인 111 -> total 10989 -> 0.5% 적립 54.
-    적립이 54인 것이 중요하다. 10989 * 0.005 = 54.945 이므로 반올림이면 55가 되고, 명세서가 지정한 floor여야 54가 된다.
+def test_membership_never_discounts():
+    """회원을 붙여도 결제 금액은 그대로여야 한다.
+
+    이 프로젝트에서 CJ ONE 연동은 **적립 전용**이다. 등급 테이블에는 아직
+    discount_rate(FAMILY 1% 등)가 남아 있지만 금액 계산은 그것을 읽지 않는다.
+    회원 연결로 total_amount가 1원이라도 움직이면 여기서 잡힌다.
     """
     items = [{"quantity": 1, "unit_price": "11100.00"}]
-    amounts = compute_amounts(
-        items,
-        discount_rate=FAMILY_DISCOUNT_RATE,
-        point_earn_rate=POINT_EARN_RATE,
-    )
-    assert amounts == Amounts(
-        gross_amount=11100,
-        membership_discount_amount=111,
-        manual_discount_amount=0,
-        discount_amount=111,
-        total_amount=10989,
-        point_earned=54,
-    )
+
+    guest = compute_amounts(items)
+    member = compute_amounts(items, point_earn_rate=POINT_EARN_RATE)
+
+    assert member.total_amount == guest.total_amount == 11100
+    assert member.membership_discount_amount == 0
+    assert member.discount_amount == 0
+    # 달라지는 것은 적립뿐이다. floor(11100 * 0.005) = 55.5 -> 55
+    # 반올림이면 56이 되므로 명세서 1.5의 floor도 함께 고정된다.
+    assert guest.point_earned == 0
+    assert member.point_earned == 55
+
+
+def test_compute_amounts_rejects_a_discount_rate_argument():
+    """할인율을 넘길 통로 자체가 없어야 한다.
+
+    기본값 0짜리 파라미터로 남겨두면 호출부 한 곳이 값을 넘기는 순간 할인이
+    되살아난다. 인자를 받지 않는다는 사실 자체를 고정해둔다.
+    """
+    import pytest
+
+    with pytest.raises(TypeError):
+        compute_amounts([{"quantity": 1, "unit_price": 10000}],
+                        discount_rate=Decimal("0.01"))
 
 
 def test_decimal_holds_at_rates_where_float_floor_breaks():
-    """현재 비율(1%·0.5%)에서는 float도 같은 답을 낸다. 비율이 바뀌면 달라진다.
+    """현재 적립률(0.5%)에서는 float도 같은 답을 낸다. 비율이 바뀌면 달라진다.
 
-    rate=0.0029, gross=10000 -> float은 28.999999999999996이라 내림 시 28,
-    Decimal은 29. 등급 비율이 조정되는 순간 조용히 1이 어긋나는 지점을 고정해둔다.
+    rate=0.0029, total=10000 -> float은 28.999999999999996이라 내림 시 28,
+    Decimal은 29. 적립률이 조정되는 순간 조용히 1이 어긋나는 지점을 고정해둔다.
     """
     assert math.floor(10000 * 0.0029) == 28  # float의 실제 동작
     amounts = compute_amounts(
-        [{"quantity": 1, "unit_price": 10000}], discount_rate=Decimal("0.0029")
+        [{"quantity": 1, "unit_price": 10000}], point_earn_rate=Decimal("0.0029")
     )
-    assert amounts.membership_discount_amount == 29
+    assert amounts.point_earned == 29
 
 
 def test_float_rate_does_not_leak_its_error_into_decimal():
@@ -91,32 +104,33 @@ def test_float_rate_does_not_leak_its_error_into_decimal():
     _floor_rate가 str()을 거치지 않으면 이 테스트가 28로 떨어진다.
     """
     assert compute_amounts(
-        [{"quantity": 1, "unit_price": 10000}], discount_rate=0.0029
-    ).membership_discount_amount == 29
+        [{"quantity": 1, "unit_price": 10000}], point_earn_rate=0.0029
+    ).point_earned == 29
 
 
 def test_point_is_earned_on_total_not_gross():
-    # 할인 후 금액 기준이어야 한다. gross 기준이면 할인받고 적립까지 더 받는 구조가 된다.
+    # 적립은 실제 결제액 기준이다. gross 기준이면 할인받고 적립까지 더 받는 구조가 된다.
+    # 등급 할인이 없어졌으므로 gross와 total을 벌리는 수단은 수동 할인뿐이다.
     amounts = compute_amounts(
         [{"quantity": 1, "unit_price": 10000}],
-        discount_rate=Decimal("0.0100"),
         point_earn_rate=POINT_EARN_RATE,
+        manual_discount_amount=100,
     )
     assert amounts.total_amount == 9900
     # floor(9900 * 0.005) = 49, gross 기준이면 50
     assert amounts.point_earned == 49
 
 
-def test_manual_discount_is_added_to_membership_discount():
+def test_manual_discount_is_the_only_discount():
     amounts = compute_amounts(
         [{"quantity": 1, "unit_price": 10000}],
-        discount_rate=Decimal("0.0100"),
+        point_earn_rate=POINT_EARN_RATE,
         manual_discount_amount=500,
     )
-    assert amounts.membership_discount_amount == 100
+    assert amounts.membership_discount_amount == 0   # 등급 할인은 언제나 0
     assert amounts.manual_discount_amount == 500
-    assert amounts.discount_amount == 600
-    assert amounts.total_amount == 9400
+    assert amounts.discount_amount == 500
+    assert amounts.total_amount == 9500
 
 
 def test_manual_discount_is_clamped_when_items_shrink_below_it():
@@ -133,9 +147,10 @@ def test_manual_discount_is_clamped_when_items_shrink_below_it():
 
 def test_empty_order_is_all_zero():
     # 항목을 전부 지운 PENDING 주문. 0으로 떨어져야 다음 계산이 정상 시작된다.
-    amounts = compute_amounts([], discount_rate=FAMILY_DISCOUNT_RATE)
+    amounts = compute_amounts([], point_earn_rate=POINT_EARN_RATE)
     assert amounts.gross_amount == 0
     assert amounts.total_amount == 0
+    assert amounts.point_earned == 0
 
 
 def test_as_order_columns_covers_every_amount_column():
