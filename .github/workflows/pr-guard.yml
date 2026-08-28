@@ -1,51 +1,33 @@
 name: PR Target Guard
 
-# 브랜치 흐름을 CI로 강제한다.
-#   feature/fix/docs/refactor/chore  ->  dev-fe / dev-be
-#   dev-fe / dev-be                  ->  test
-#   test                             ->  master
+# master 로 향하는 PR 의 출처만 강제한다.
+#   feature/fix/docs/refactor/chore  ->  dev-fe / dev-be  ->  test  ->  master
+#
+# test 는 통합 검증 브랜치라 여러 출처(dev-fe, dev-be, chore/*, fix/* 등)에서
+# PR 이 들어온다. 여기에 가드를 걸면 기존 작업 흐름이 막히므로 걸지 않는다.
 # (frontend/.claude/rules/git-flow.md 참고)
 
 on:
   pull_request:
-    branches: [master, test]
+    branches: [master]
     types: [opened, reopened, synchronize, edited]
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - name: PR 출처 브랜치 확인
+      - name: master PR 출처 확인 (test / hotfix 만 허용)
         env:
-          BASE: ${{ github.base_ref }}
           HEAD: ${{ github.head_ref }}
         run: |
           set -eu
 
-          allowed=0
-          case "$BASE" in
-            master)
-              # 최종 통합은 test 에서만 올린다. 긴급 수정은 hotfix/* 로 예외 허용.
-              case "$HEAD" in
-                test|hotfix/*) allowed=1 ;;
-              esac
-              hint="master 로의 PR은 test 브랜치(또는 hotfix/*)에서만 허용됩니다. dev-fe / dev-be 는 먼저 test 로 PR을 올려주세요."
-              ;;
-            test)
-              case "$HEAD" in
-                dev-fe|dev-be|hotfix/*) allowed=1 ;;
-              esac
-              hint="test 로의 PR은 dev-fe / dev-be(또는 hotfix/*)에서만 허용됩니다. 작업 브랜치는 먼저 dev-fe 또는 dev-be 로 PR을 올려주세요."
+          case "$HEAD" in
+            test|hotfix/*)
+              echo "OK: $HEAD -> master"
               ;;
             *)
-              allowed=1
-              hint=""
+              echo "::error::master 로의 PR 은 test 브랜치(또는 hotfix/*)에서만 허용됩니다. 현재 head 브랜치: '$HEAD'. dev-fe / dev-be / 작업 브랜치는 먼저 test 로 PR 을 올려주세요."
+              exit 1
               ;;
           esac
-
-          if [ "$allowed" -ne 1 ]; then
-            echo "::error::$hint 현재 head 브랜치: '$HEAD', base 브랜치: '$BASE'."
-            exit 1
-          fi
-
-          echo "OK: $HEAD -> $BASE"

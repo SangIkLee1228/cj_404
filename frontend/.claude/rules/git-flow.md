@@ -13,10 +13,9 @@
 feature/ fix/ docs/ refactor/ chore/  ->  dev-fe / dev-be  ->  test  ->  master
 ```
 
-- **`master`로의 PR은 `test`에서만 연다.** `dev-fe`·`dev-be`·작업 브랜치는 `master`로 직접 PR을 열지 않는다.
-- **`test`로의 PR은 `dev-fe` 또는 `dev-be`에서만 연다.** 작업 브랜치는 `test`로 직접 PR을 열지 않는다.
-- 릴리스 직전 긴급 수정에 한해 `hotfix/`로 분기해 `test` 또는 `master`로 직접 PR을 열 수 있다.
-- `.github/workflows/pr-guard.yml`이 위 규칙에 어긋나는 PR을 자동으로 실패시킨다.
+- **`master`로의 PR은 `test`에서만 연다.** `dev-fe`·`dev-be`·작업 브랜치는 `master`로 직접 PR을 열지 않는다. 릴리스 직전 긴급 수정에 한해 `hotfix/`로 분기해 `master`로 직접 PR을 열 수 있다.
+- `test`는 통합 검증 브랜치라 `dev-fe`·`dev-be` 외에 동기화용 `chore/`·`fix/` 브랜치에서도 PR이 들어온다 — 출처를 제한하지 않는다.
+- `.github/workflows/pr-guard.yml`은 `master`로 향하는 PR의 출처만 검사한다.
 
 ## 브랜치 네이밍
 
