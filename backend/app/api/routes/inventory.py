@@ -31,7 +31,7 @@ logger = structlog.get_logger("app.inventory")
 
 _SELECT = (
     "product_id, produced_qty, sold_qty, remaining_qty, updated_at,"
-    " product!inner(product_name, product_type, category, image_url)"
+    " product!inner(product_name, product_type, category, image_url, is_active)"
 )
 
 # "조치 필요 항목이 위" (API명세서 1.3) - OUT/LOW를 OK보다 먼저 보여준다.
@@ -106,7 +106,16 @@ def list_inventory(
     supabase = get_supabase()
     baseline_map = _baseline_map(staff.store_id)
 
-    query = supabase.table("inventory").select(_SELECT).eq("store_id", staff.store_id)
+    # 카탈로그에서 내린 상품(product.is_active=false)은 재고 행이 남아 있어도 화면에서 뺀다
+    # - S-10 상품 목록에 없는 상품이 재고 표에만 남는 불일치를 막는다. product!inner
+    # 임베드라 이 필터가 곧 조인 제외가 된다. 매장 단위 판매중지(store_product.is_active
+    # =false)는 INVENTORY와 FK가 없어 여기서 거르지 못한다(모듈 docstring 참고).
+    query = (
+        supabase.table("inventory")
+        .select(_SELECT)
+        .eq("store_id", staff.store_id)
+        .eq("product.is_active", True)
+    )
     if product_type:
         query = query.eq("product.product_type", product_type)
     if category:

@@ -79,3 +79,41 @@ def test_nothing_produced_does_not_divide_by_zero():
     """생산 0이면 비율이 정의되지 않는다. 0으로 두고 remaining_qty가 상태를 정한다."""
     assert inventory._remaining_pct(remaining_qty=0, produced_qty=0) == 0.0
     assert inventory._stock_status(0, remaining_pct=0.0, baseline_pct=10) == "OUT"
+
+
+def test_inactive_catalog_products_are_excluded_from_the_list(monkeypatch):
+    """카탈로그에서 내린 상품(product.is_active=false)은 재고 표에 남으면 안 된다.
+
+    INVENTORY 행은 상품을 내려도 그대로 남아 있어서, 필터가 없으면 S-10 상품 목록에는
+    없는 상품이 재고 화면에만 계속 보인다("dashboard와 supabase 목록 불일치").
+    product!inner 임베드라 임베드 컬럼 필터가 곧 조인 제외가 된다.
+    """
+    applied: list[tuple] = []
+
+    class _RecordingQuery(_FakeQuery):
+        def eq(self, *args, **kwargs):
+            applied.append(args)
+            return self
+
+    class _RecordingSupabase:
+        def table(self, name):
+            return _RecordingQuery([])
+
+    monkeypatch.setattr(inventory, "get_supabase", lambda: _RecordingSupabase())
+    monkeypatch.setattr(inventory, "with_signed_images", lambda items: items)
+
+    # 직접 호출이라 FastAPI가 기본값을 풀어주지 않는다 - Query 객체가 그대로
+    # 넘어가면 truthy로 판정돼 엉뚱한 필터가 붙으므로 명시적으로 넘긴다.
+    inventory.list_inventory(
+        stock_status="ALL",
+        q=None,
+        product_type=None,
+        category=None,
+        limit=50,
+        offset=0,
+        staff=SimpleNamespace(store_id=1),
+    )
+
+    assert ("product.is_active", True) in applied
+    # 임베드 컬럼 필터는 그 컬럼이 select 절에 있어야 PostgREST가 받아준다.
+    assert "is_active" in inventory._SELECT
