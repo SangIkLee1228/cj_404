@@ -1,0 +1,26 @@
+dummy_job:
+  stage: .pre
+  script: echo "This is a dummy job for master branch"
+  rules:
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH'
+      when: always
+    - when: never
+
+include:
+  - project: "oneflowai-v2/admin/common-cicd-jobs"
+    ref: main
+    file: "/common/rules.yml"
+  - project: "oneflowai-v2/admin/common-cicd-jobs"
+    ref: main
+    file: "/common/variables.yml"
+  - project: "oneflowai-v2/admin/common-cicd-jobs"
+    ref: main
+    file: "/common/delete-job.yml"
+  - project: "oneflowai-v2/admin/common-cicd-jobs"
+    ref: main
+    file: "/src/model-ci.yaml"
+    rules:
+      - if: '$CI_COMMIT_BRANCH == "model/ci"'
+        when: always

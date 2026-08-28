@@ -1,0 +1,26 @@
+# 시스템 코드가 사용하는 라이브러리입니다
+fastapi<0.116.0
+redis<6.0.0
+psycopg2-binary>=2.9.10,<3.0.0
+# oneflowai>=1.1.24,<2.0.0
+
+# 유저가 사용할 라이브러리를 정의합니다.
+uvicorn<0.35.0
+ultralytics
+torch          # Dockerfile 에서 CPU 휠로 선설치됨 (추론은 onnxruntime-gpu 담당)
+torchvision    # 〃 (ultralytics 하드 의존성)
+opencv-python-headless
+pillow
+pillow-heif
+numpy
+requests
+onnx>=1.12.0
+onnxslim
+onnxruntime-gpu==1.23.2  # CUDA 12.x + cuDNN 9 필요 (Dockerfile 베이스 이미지와 세트)
+structlog
+
+# --- 컨테이너 추론 경로에서 미사용 (bread_clip_pipeline 로컬 전용) - 슬림화 위해 제외 ---
+# transformers
+# accelerate
+# beautifulsoup4
+# tqdm   (ultralytics 가 전이 의존성으로 설치)
