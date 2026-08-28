@@ -116,6 +116,43 @@
 .topTotal b {
   font-size: 14px;
 }
+/* 대시보드 열기 버튼. 대시보드 상단바의 '직원 POS 열기'와 짝이 되는
+   버튼이라 치수·타이포를 그쪽 primary 버튼(dashboard components/ui/
+   button.module.css의 .button + .primary)과 똑같이 맞춘다:
+   32px 높이, 0 12px 여백, radius 8px, 11px/700, 흰 글씨 + 그린 채움.
+   채움색만 대시보드 토큰(#0a6c56)이 아니라 POS 자신의 --green을 쓴다 —
+   두 버튼은 각각 다른 창에 있어 나란히 놓이지 않고, pos.module.css에 외부
+   화면의 하드코딩 색을 들이지 않으려는 것이다(두 값의 차이는 육안으로
+   거의 구분되지 않는다).
+
+   선택자에 .posRoot를 붙여 쓰는 이유: 위쪽 `.posRoot button { font: inherit }`가
+   font 단축 속성이라 font-size/font-weight까지 상속값으로 되돌리는데, 그
+   선택자의 우선순위(0,1,1)가 클래스 하나(0,1,0)보다 높아 작성 순서와 무관하게
+   이긴다. .posRoot를 붙이면 (0,2,0)이 돼 여기 값이 적용된다. */
+.posRoot .dashboardBtn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dashboardBtn:hover {
+  background: var(--green-2);
+  border-color: var(--green-2);
+}
+.dashboardBtn:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
 
 /* 인식/결제 화면: 좌측은 Floating 고객 화면을 위해 비워둔다 */
 .recognitionMain {
