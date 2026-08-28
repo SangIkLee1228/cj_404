@@ -29,7 +29,7 @@ export default function CartList({
   return (
     <div className={styles.scanList}>
       {items.map((item) => {
-        const remaining = remainingOf(item.name);
+        const remaining = remainingOf(item.productId);
         const plusDisabled = remaining !== Infinity && item.qty >= remaining;
         return (
           <div

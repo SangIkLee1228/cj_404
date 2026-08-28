@@ -11,19 +11,37 @@ PostgREST의 임베디드 리소스 문법을 쓰며, `!inner`를 붙여야
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from postgrest.exceptions import APIError
 
 from app.core.deps import StaffContext, get_staff_context, require_manager
-from app.core.supabase_client import get_supabase
-from app.schemas.common import ProductCreate, ProductRead, ProductUpdate
+from app.core.errors import ApiError
+from app.core.images import with_signed_image, with_signed_images
+from app.core.supabase_client import fetch_all, get_supabase
+from app.core.timeutil import resolve_period
+from app.schemas.common import (
+    ProductCreate,
+    ProductListResponse,
+    ProductRead,
+    ProductRecommendation,  # 추가
+    ProductUpdate,
+    RecommendationListResponse,  # 추가
+)
 
 router = APIRouter(prefix="/products", tags=["products"])
 logger = structlog.get_logger("app.products")
 
+UNIQUE_VIOLATION = "23505"
 # PRODUCT ⨝ STORE_PRODUCT 조인 select 절
 _SELECT = (
     "product_id, product_name, product_type, category, image_url, source_type, is_active,"
     " store_product!inner(price, stock_baseline_pct, is_active)"
 )
+
+# PRODUCT(매장 무관 카탈로그)에 쓰는 필드.
+# is_active는 여기 넣지 않는다 - PRODUCT에 쓰면 10개 매장 전체에 전파된다.
+# 판매여부는 STORE_PRODUCT에만 기록한다 (API명세서 v1.3 · 9장 🔴3).
+CATALOG_FIELDS = {"product_name", "product_type",
+                  "category", "image_url", "source_type"}
 
 
 def _flatten(row: dict) -> ProductRead:
@@ -43,12 +61,13 @@ def _flatten(row: dict) -> ProductRead:
     )
 
 
-@router.get("")
+@router.get("", response_model=ProductListResponse)
 def list_products(
     product_type: str | None = Query(default=None, pattern="^(BREAD|DRINK)$"),
     category: str | None = None,
     q: str | None = Query(default=None, description="상품명 부분 검색"),
-    item_status: str = Query(default="ACTIVE", alias="status", pattern="^(ACTIVE|INACTIVE|ALL)$"),
+    item_status: str = Query(
+        default="ACTIVE", alias="status", pattern="^(ACTIVE|INACTIVE|ALL)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     staff: StaffContext = Depends(get_staff_context),
@@ -64,7 +83,9 @@ def list_products(
     if item_status == "ACTIVE":
         query = query.eq("is_active", True).eq("store_product.is_active", True)
     elif item_status == "INACTIVE":
-        query = query.eq("is_active", False)
+        # 원래는 NOT(product.is_active AND store_product.is_active), 즉 둘 중 하나라도 false다.
+        # PostgREST가 부모 컬럼과 임베드 컬럼을 섞은 or 필터를 받아주지 않아 매장 판매여부만으로 판정한다.
+        query = query.eq("store_product.is_active", False)
 
     if product_type:
         query = query.eq("product_type", product_type)
@@ -82,14 +103,110 @@ def list_products(
     )
 
     return {
-        "items": [_flatten(row) for row in result.data],
+        "items": with_signed_images([_flatten(row) for row in result.data]),
         "total": result.count or 0,
         "limit": limit,
         "offset": offset,
     }
 
+# 추천 기능
 
-@router.get("/{product_id}")
+
+@router.get("/recommendations", response_model=RecommendationListResponse)
+def recommend_products(
+    order_id: int | None = Query(
+        default=None, description="진행 중인 주문. 이미 담긴 상품은 제외"),
+    product_type: str = Query(default="DRINK", pattern="^(BREAD|DRINK|ALL)$"),
+    limit: int = Query(default=3, ge=1, le=10),
+    staff: StaffContext = Depends(get_staff_context),
+):
+    """메뉴 추천 TOP N (FR-11). 최근 7일 판매 수량 상위, 동률이면 가격 내림차순."""
+    supabase = get_supabase()
+
+    # ① 이미 주문에 담긴 상품 (제외 대상)
+    in_order: set[int] = set()
+    if order_id is not None:
+        rows = (
+            supabase.table("order_item")
+            .select("product_id, orders!inner(store_id)")
+            .eq("order_id", order_id)
+            .eq("orders.store_id", staff.store_id)
+            .execute()
+        ).data
+        in_order = {row["product_id"] for row in rows}
+
+    # ② 최근 7일 판매 수량 (KST 기준)
+    week = resolve_period("7D")
+    sold_7d: dict[int, int] = {}
+    # fetch_all로 읽는 이유: 이 테이블은 상품 × 날짜다. 상품 120종 × 7일이면 840행,
+    # 150종이면 1050행 - PostgREST의 1000행 상한을 조용히 넘긴다. 잘리면 잘린 상품의
+    # 판매량이 0으로 보여 추천 순위가 틀린 채 200으로 나간다.
+    sales_rows = fetch_all(
+        lambda: (
+            supabase.table("sales_stat_daily")
+            .select("product_id, sold_qty")
+            .eq("store_id", staff.store_id)
+            .gte("stat_date", week.start_date.isoformat())
+            .lte("stat_date", week.end_date.isoformat())
+        ),
+        order_by="stat_id",
+    )
+    for row in sales_rows:
+        sold_7d[row["product_id"]] = sold_7d.get(
+            row["product_id"], 0) + row["sold_qty"]
+
+    # ③ 재고가 남은 상품만 (remaining_qty > 0)
+    remaining = {
+        row["product_id"]: row["remaining_qty"]
+        for row in (
+            supabase.table("inventory")
+            .select("product_id, remaining_qty")
+            .eq("store_id", staff.store_id)
+            .gt("remaining_qty", 0)
+            .execute()
+        ).data
+    }
+
+    # ④ 판매 중인 후보 상품
+    query = (
+        supabase.table("product")
+        .select(_SELECT)
+        .eq("store_product.store_id", staff.store_id)
+        .eq("is_active", True)
+        .eq("store_product.is_active", True)
+    )
+    if product_type != "ALL":
+        query = query.eq("product_type", product_type)
+
+    candidates: list[ProductRecommendation] = []
+    for row in query.execute().data:
+        product_id = row["product_id"]
+        if product_id in in_order or product_id not in remaining:
+            continue
+        product = _flatten(row)
+        candidates.append(
+            ProductRecommendation(
+                product_id=product_id,
+                product_name=product.product_name,
+                product_type=product.product_type,
+                price=product.price,
+                image_url=product.image_url,
+                sold_qty_7d=sold_7d.get(product_id, 0),
+                remaining_qty=remaining[product_id],
+            )
+        )
+
+    candidates.sort(key=lambda c: (-c.sold_qty_7d, -c.price))
+    items = candidates[:limit]
+
+    # total은 페이지가 아니라 필터를 통과한 전체 건수다(명세서 1.3).
+    # len(items)를 쓰면 항상 limit 이하라 "더 있는지"를 FE가 알 수 없다.
+    return RecommendationListResponse(
+        items=with_signed_images(items), total=len(candidates), limit=limit, offset=0
+    )
+
+
+@router.get("/{product_id}", response_model=ProductRead)
 def get_product(product_id: int, staff: StaffContext = Depends(get_staff_context)):
     """상품 단건 (상품 수정 화면 진입용)."""
     supabase = get_supabase()
@@ -103,10 +220,10 @@ def get_product(product_id: int, staff: StaffContext = Depends(get_staff_context
     )
     if not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "상품을 찾을 수 없습니다")
-    return _flatten(result.data[0])
+    return with_signed_image(_flatten(result.data[0]))
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductRead)
 def create_product(payload: ProductCreate, staff: StaffContext = Depends(require_manager)):
     """상품 등록 (FR-16, 매니저 전용).
 
@@ -117,36 +234,37 @@ def create_product(payload: ProductCreate, staff: StaffContext = Depends(require
     """
     supabase = get_supabase()
 
-    product_row = {
-        "product_name": payload.product_name,
-        "product_type": payload.product_type,
-        "category": payload.category,
-        "image_url": payload.image_url,
-        "source_type": payload.source_type,
-        "created_by": staff.staff_id,
-    }
-    created = supabase.table("product").insert(product_row).execute().data[0]
-    product_id = created["product_id"]
-
-    supabase.table("store_product").insert(
-        {
-            "store_id": staff.store_id,
-            "product_id": product_id,
-            "price": float(payload.price),
-            "stock_baseline_pct": payload.stock_baseline_pct,
-        }
-    ).execute()
-
-    if payload.initial_qty > 0:
-        supabase.table("inventory").insert(
-            {
-                "store_id": staff.store_id,
-                "product_id": product_id,
-                "produced_qty": payload.initial_qty,
-                "sold_qty": 0,
-                "remaining_qty": payload.initial_qty,
-            }
-        ).execute()
+    try:
+        product_id = (
+            supabase.rpc(
+                "create_product_with_store",
+                {
+                    "p_store_id": staff.store_id,
+                    "p_created_by": staff.staff_id,
+                    "p_product_name": payload.product_name,
+                    "p_product_type": payload.product_type,
+                    "p_category": payload.category,
+                    "p_image_url": payload.image_url,
+                    "p_source_type": payload.source_type,
+                    "p_price": float(payload.price),
+                    "p_baseline_pct": payload.stock_baseline_pct,
+                    "p_initial_qty": payload.initial_qty,
+                },
+            )
+            .execute()
+            .data
+        )
+    except APIError as exc:
+        if exc.code != UNIQUE_VIOLATION:
+            raise
+        logger.info("product.duplicate_name",
+                    product_name=payload.product_name)
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            "DUPLICATE_PRODUCT_NAME",
+            f"'{payload.product_name}'은(는) 이미 등록된 상품명입니다.",
+            details=[{"field": "product_name", "reason": "duplicate"}],
+        ) from exc
 
     logger.info(
         "product.created",
@@ -157,7 +275,7 @@ def create_product(payload: ProductCreate, staff: StaffContext = Depends(require
     return get_product(product_id, staff)
 
 
-@router.patch("/{product_id}")
+@router.patch("/{product_id}", response_model=ProductRead)
 def update_product(
     product_id: int, payload: ProductUpdate, staff: StaffContext = Depends(require_manager)
 ):
@@ -166,16 +284,34 @@ def update_product(
     카탈로그 필드는 PRODUCT, 가격·기준선은 STORE_PRODUCT로 나눠 쓴다.
     """
     supabase = get_supabase()
+
+    # 쓰기 전에 이 매장이 파는 상품인지 먼저 확인한다.
+    #
+    # require_manager는 "매니저인가"만 보장하지 이 상품이 내 매장 것인지는 모른다.
+    # PRODUCT는 10개 매장이 공유하는 카탈로그이고 아래 UPDATE는 product_id로만
+    # 걸리므로, 확인 없이 쓰면 남의 매장 상품 이름·이미지를 전 매장에 바꿔버린다.
+    # (예전 코드는 맨 끝 get_product에서 404를 냈는데, 그때는 이미 쓴 뒤였다.)
+    #
+    # get_product 대신 store_product 단건 조회를 쓰는 이유: 확인에 필요한 건 "이 매장이
+    # 파는가"뿐이다. get_product는 조인 + 이미지 서명까지 하는데, 그 결과를 버릴 거라면
+    # 응답 한 번에 같은 일을 두 번 하는 셈이다.
+    owned = (
+        supabase.table("store_product")
+        .select("store_product_id")
+        .eq("product_id", product_id)
+        .eq("store_id", staff.store_id)
+        .limit(1)
+        .execute()
+    ).data
+    if not owned:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "상품을 찾을 수 없습니다")
+
     sent = payload.model_dump(exclude_unset=True)
+    catalog = {k: v for k, v in sent.items() if k in CATALOG_FIELDS}
 
-    catalog = {
-        k: v
-        for k, v in sent.items()
-        if k in {"product_name", "product_type", "category", "image_url", "source_type", "is_active"}
-    }
     if catalog:
-        supabase.table("product").update(catalog).eq("product_id", product_id).execute()
-
+        supabase.table("product").update(catalog).eq(
+            "product_id", product_id).execute()
     store_fields: dict = {}
     if "price" in sent:
         store_fields["price"] = float(sent["price"])

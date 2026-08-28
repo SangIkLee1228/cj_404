@@ -11,7 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
-from app.schemas.scan import ScanSessionCreate
+from app.schemas.scan import (
+    ScanCancelResponse,
+    ScanDiscardResponse,
+    ScanSessionCreate,
+    ScanSessionCreated,
+    ScanSessionDetail,
+)
+from app.services.orders import Amounts
 
 router = APIRouter(prefix="/scan-sessions", tags=["scan"])
 logger = structlog.get_logger("app.scan")
@@ -115,7 +122,7 @@ def _session_detail(session: dict) -> dict:
     }
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ScanSessionCreated)
 def create_scan_session(
     payload: ScanSessionCreate, staff: StaffContext = Depends(get_staff_context)
 ):
@@ -177,13 +184,18 @@ def create_scan_session(
     }
 
 
-@router.get("/{scan_session_id}")
+@router.get("/{scan_session_id}", response_model=ScanSessionDetail)
 def get_scan_session(scan_session_id: int, staff: StaffContext = Depends(get_staff_context)):
     """세션 상세 + 인식 항목 (FR-02)."""
     return _session_detail(_load_session(scan_session_id, staff))
 
 
-@router.post("/{scan_session_id}/recognize")
+# 186번째 줄
+@router.post(
+    "/{scan_session_id}/recognize",
+    response_model=ScanSessionDetail,
+    responses={501: {"description": "AI 추론 서버 미연결 (의도된 stub)"}},
+)
 def recognize_scan_session(
     scan_session_id: int, staff: StaffContext = Depends(get_staff_context)
 ):
@@ -214,7 +226,7 @@ def recognize_scan_session(
     )
 
 
-@router.post("/{scan_session_id}/cancel")
+@router.post("/{scan_session_id}/cancel", response_model=ScanCancelResponse)
 def cancel_scan_session(
     scan_session_id: int, staff: StaffContext = Depends(get_staff_context)
 ):
@@ -241,7 +253,7 @@ def cancel_scan_session(
     }
 
 
-@router.post("/{scan_session_id}/discard")
+@router.post("/{scan_session_id}/discard", response_model=ScanDiscardResponse)
 def discard_scan_session(
     scan_session_id: int, staff: StaffContext = Depends(get_staff_context)
 ):
@@ -269,14 +281,18 @@ def discard_scan_session(
             )
 
         existing = (
-            supabase.table("order_item").select("order_item_id").eq("order_id", order_id).execute()
+            supabase.table("order_item").select(
+                "order_item_id").eq("order_id", order_id).execute()
         )
         reverted = len(existing.data)
         if reverted:
-            supabase.table("order_item").delete().eq("order_id", order_id).execute()
+            supabase.table("order_item").delete().eq(
+                "order_id", order_id).execute()
+        # 손으로 쓴 dict는 컬럼을 빠뜨린다 - 실제로 point_earned가 빠져 있어서
+        # 항목을 다 지운 주문이 "금액 0원인데 적립 예정 54p"로 남았다.
+        # Amounts가 컬럼 6종을 한 곳에서 정의하므로 그것을 쓴다.
         supabase.table("orders").update(
-            {"gross_amount": 0, "discount_amount": 0, "membership_discount_amount": 0,
-             "manual_discount_amount": 0, "total_amount": 0}
+            Amounts(0, 0, 0, 0, 0, 0).as_order_columns()
         ).eq("order_id", order_id).execute()
 
     updated = (
@@ -286,7 +302,8 @@ def discard_scan_session(
         .execute()
     ).data[0]
 
-    logger.info("scan.discarded", scan_session_id=scan_session_id, reverted_item_count=reverted)
+    logger.info("scan.discarded", scan_session_id=scan_session_id,
+                reverted_item_count=reverted)
     return {
         "scan_session_id": updated["scan_session_id"],
         "order_id": order_id,

@@ -36,6 +36,11 @@ class InventoryListItem(BaseModel):
     product_name: str
     product_type: ProductType
     category: str | None = None
+    # 재고 조정 모달의 썸네일용. GET /products와 동일하게 PRODUCT.image_url을 그대로 준다.
+    # 현재 값은 public 버킷의 완전한 URL이라 FE가 바로 <img src>에 쓸 수 있다
+    # (API명세서 4.3은 비공개 버킷+서명 URL을 전제하는데 실제 상품 이미지는 공개 경로에 있다 - storage 쪽 불일치).
+    # 121종 중 91종만 값이 있어 나머지는 None이다. FE는 placeholder를 준비할 것.
+    image_url: str | None = None
     produced_qty: int
     sold_qty: int
     remaining_qty: int
@@ -54,7 +59,13 @@ class InventoryListResponse(BaseModel):
 
 
 class RestockRequest(BaseModel):
-    """PATCH /api/inventory/{product_id}/restock 요청. 보충 이력은 남기지 않는다(DB설계서 v2.2 · 4.13)."""
+    """PATCH /api/inventory/{product_id}/restock 요청. 보충 이력은 남기지 않는다(DB설계서 v2.2 · 4.13).
+
+    필드가 qty 하나뿐인 것은 확정된 결정이다(2026-08-26):
+    - **조정 사유 없음** - 목업 모달의 "조정 사유" 드롭다운은 목업에서 제거하기로 했다.
+      받아봤자 저장할 곳이 없다(INVENTORY_RESTOCK_LOG는 DB설계서 13장 향후 확장).
+    - **감소 조정 없음** - 폐기·차감 시나리오는 범위 밖이라 ge=1로 증가만 허용한다.
+    """
 
     qty: int = Field(ge=1, le=999)
 

@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.deps import StaffContext, get_staff_context
 from app.core.errors import ApiError
+from app.core.formatting import phone_variants
+from app.core.masking import mask_name
 from app.core.supabase_client import get_supabase
 from app.schemas.common import MemberLookupResponse
 
@@ -43,21 +45,12 @@ def _check_rate_limit(staff_id: int) -> None:
     calls.append(now)
 
 
-def _mask_name(name: str) -> str:
-    """"정우현" → "정*현" 패턴 마스킹(DB설계서 v2.2 · 4.5 MEMBER.name 주석 기준)."""
-    if len(name) <= 1:
-        return name
-    if len(name) == 2:
-        return f"{name[0]}*"
-    return f"{name[0]}{'*' * (len(name) - 2)}{name[-1]}"
-
-
 def _flatten(row: dict) -> MemberLookupResponse:
     grade = row["membership_grade"]
     grade = grade[0] if isinstance(grade, list) else grade
     return MemberLookupResponse(
         member_id=row["member_id"],
-        name=_mask_name(row["name"]),
+        name=mask_name(row["name"]),
         grade_code=grade["grade_code"],
         grade_name=grade["grade_name"],
         discount_rate=grade["discount_rate"],
@@ -75,10 +68,13 @@ def lookup_member(
     _check_rate_limit(staff.staff_id)
 
     supabase = get_supabase()
+    # 명세서 4.6은 `01012345678`을 쓰는데 MEMBER.phone에는 하이픈이 들어 있다.
+    # eq 하나로 조회하면 정상 회원이 항상 404가 난다 - POST /orders/{id}/member는
+    # 이미 양쪽을 시도하고 있어서, 조회는 실패하는데 연결은 되는 상태였다.
     result = (
         supabase.table("member")
         .select(_SELECT)
-        .eq("phone", phone)
+        .in_("phone", phone_variants(phone))
         .eq("is_active", True)
         .limit(1)
         .execute()
