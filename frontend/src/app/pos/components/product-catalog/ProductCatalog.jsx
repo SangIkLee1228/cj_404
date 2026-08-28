@@ -1,5 +1,6 @@
 import styles from '../../pos.module.css';
 import ProductCard from './ProductCard';
+import { getBreadDisplayIndex } from '../../data/breadDisplayOrder';
 
 /** 실제 카탈로그 응답 순서(product_type, category, product_name)를 그대로 쓰고,
  * 카테고리 칩은 그 목록에 실제로 등장하는 카테고리만 등장 순서대로 뽑아 만든다.
@@ -18,6 +19,19 @@ function buildCategories(items) {
   return list;
 }
 
+/** BREAD는 breadDisplayOrder.js의 진열 순서(product_id 기준)로 정렬한다 —
+ * DRINK는 drinkCatalog.js에 이미 카테고리/family 순서대로 선언돼 있으므로
+ * 그 선언 순서를 그대로 진열 순서로 쓴다. 원본 배열은 건드리지 않고 복사본만
+ * 정렬해서 반환한다(디스플레이 파생 배열). */
+function sortForDisplay(items, isDrink) {
+  if (isDrink) return items;
+  return [...items].sort((a, b) => {
+    const diff =
+      getBreadDisplayIndex(a.productId) - getBreadDisplayIndex(b.productId);
+    return diff !== 0 ? diff : a.productId - b.productId;
+  });
+}
+
 export default function ProductCatalog({
   productType,
   category,
@@ -28,8 +42,9 @@ export default function ProductCatalog({
   onAdd,
 }) {
   const isDrink = productType === 'drink';
-  const catalog = products.filter(
-    (p) => p.productType === (isDrink ? 'DRINK' : 'BREAD')
+  const catalog = sortForDisplay(
+    products.filter((p) => p.productType === (isDrink ? 'DRINK' : 'BREAD')),
+    isDrink
   );
   const categories = buildCategories(catalog);
   const items =
