@@ -2,14 +2,13 @@ name: backend-ci
 
 on:
   push:
-    branches: [main]
+    branches: [master, test, dev-be]
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+  # PR 에서는 paths 필터를 두지 않는다 - 필수 상태 체크로 지정했을 때
+  # backend 변경이 없는 PR 이 "대기 중" 으로 영영 머지되지 않는 것을 막는다.
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-ci.yml"
 
 jobs:
   lint-and-test:

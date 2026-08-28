@@ -1,19 +1,51 @@
 name: PR Target Guard
 
-# master로 향하는 PR은 dev-fe 브랜치에서만 허용한다.
+# 브랜치 흐름을 CI로 강제한다.
+#   feature/fix/docs/refactor/chore  ->  dev-fe / dev-be
+#   dev-fe / dev-be                  ->  test
+#   test                             ->  master
 # (frontend/.claude/rules/git-flow.md 참고)
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, test]
     types: [opened, reopened, synchronize, edited]
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - name: master PR 출처 확인 (dev-fe만 허용)
-        if: github.head_ref != 'dev-fe'
+      - name: PR 출처 브랜치 확인
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
         run: |
-          echo "::error::master로의 PR은 dev-fe 브랜치에서만 허용됩니다. 현재 head 브랜치: '${{ github.head_ref }}'. feature/fix/docs/refactor/chore 브랜치는 dev-fe로 PR을 올려주세요."
-          exit 1
+          set -eu
+
+          allowed=0
+          case "$BASE" in
+            master)
+              # 최종 통합은 test 에서만 올린다. 긴급 수정은 hotfix/* 로 예외 허용.
+              case "$HEAD" in
+                test|hotfix/*) allowed=1 ;;
+              esac
+              hint="master 로의 PR은 test 브랜치(또는 hotfix/*)에서만 허용됩니다. dev-fe / dev-be 는 먼저 test 로 PR을 올려주세요."
+              ;;
+            test)
+              case "$HEAD" in
+                dev-fe|dev-be|hotfix/*) allowed=1 ;;
+              esac
+              hint="test 로의 PR은 dev-fe / dev-be(또는 hotfix/*)에서만 허용됩니다. 작업 브랜치는 먼저 dev-fe 또는 dev-be 로 PR을 올려주세요."
+              ;;
+            *)
+              allowed=1
+              hint=""
+              ;;
+          esac
+
+          if [ "$allowed" -ne 1 ]; then
+            echo "::error::$hint 현재 head 브랜치: '$HEAD', base 브랜치: '$BASE'."
+            exit 1
+          fi
+
+          echo "OK: $HEAD -> $BASE"
