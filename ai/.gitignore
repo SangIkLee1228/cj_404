@@ -1,0 +1,107 @@
+# ============================================================================
+# 개발환경 공통 .gitignore — 기본 devenv(root) · Jupyter · code-server 호환
+#   개발환경은 $HOME(=단일 PVC) 위에서 동작하며 repo 를 clone/commit 하므로,
+#   파드 런타임/홈 dotfile/IDE 캐시/자격증명이 repo 에 섞이지 않게 차단한다.
+# ============================================================================
+
+models
+model
+
+# --- SSH / sshd 런타임 (rootless sshd: host key·pid·log·sshd_config) ---
+.ssh
+.ssh/
+.sshd/
+
+# --- 홈 dotfile / XDG 설정 (code-server ~/.config/code-server 등) ---
+.config/
+.cache
+.cache/
+.local/
+.npm/
+.conda/
+.condarc
+.jupyter/
+.ipython/
+.virtual_documents/
+.bash_logout
+.bashrc
+.profile
+.wget-hsts
+
+# --- 셸 / 도구 히스토리·런타임 흔적 ---
+.bash_history
+.python_history
+.viminfo
+.lesshst
+.sudo_as_admin_successful
+.motd_shown
+
+# --- VS Code / code-server 서버·확장 ---
+.vscode/
+.vscode-server
+.vscode-server-insiders/
+vscode_cli_alpine_x64_cli.tar.gz
+vscode-server-linux-x64.tar.gz
+
+# --- 기타 에디터 (JetBrains·vim swap 등) ---
+.idea/
+*.swp
+*.swo
+*~
+
+# --- 자격증명/시크릿 (절대 커밋 금지) ---
+.gitconfig
+.git-credentials
+.netrc
+.gnupg/
+.pki/
+.docker/
+.aws/
+.azure/
+.kube/
+
+# --- Python 캐시 / 빌드 / 가상환경 ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints
+venv
+venv/
+.venv/
+
+# --- Node (code-server JS 프로젝트) ---
+node_modules/
+.yarn/
+npm-debug.log*
+yarn-error.log*
+
+# --- mlflow / 실험 산출물 ---
+mlruns/
+
+# --- 데이터 / 모델 산출물 ---
+data
+data/
+model/
+models/
+checkpoints/
+*.h5
+*.pt
+*.pkl
+*.pb
+
+# --- 비밀/로그/임시 ---
+*.env
+.env.*
+*.log
+nohup.out
+/tmp/*
+/var/tmp/*
+/cache/*
+
+# --- OS ---
+*.DS_Store
+Thumbs.db
+Desktop.ini
