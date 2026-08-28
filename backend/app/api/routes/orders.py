@@ -27,14 +27,14 @@ from app.services.orders import (
     delete_item,
     ensure_pending,
     load_current_order,
-    load_grade_rates,
     load_item,
     load_items,
     load_member_by_phone,
     load_order,
     load_order_summary,
+    load_point_earn_rate,
     load_store_price,
-    member_rates,
+    member_point_earn_rate,
     money,
     order_detail,
     order_list_item,
@@ -228,10 +228,9 @@ def apply_manual_discount(
     ensure_pending(order)
 
     items = load_items(order_id)
-    discount_rate, point_earn_rate = load_grade_rates(
-        order.get("applied_grade_id"))
-    amounts = compute_amounts(items, discount_rate=discount_rate,
-                              point_earn_rate=point_earn_rate, manual_discount_amount=payload.amount,)
+    point_earn_rate = load_point_earn_rate(order.get("applied_grade_id"))
+    amounts = compute_amounts(items, point_earn_rate=point_earn_rate,
+                              manual_discount_amount=payload.amount,)
 
     # compute_amounts 는 gross 를 넘는 할인을 잘라낸다. 잘렸다는 건 초과했다는 뜻이다.
     if amounts.manual_discount_amount != payload.amount:
@@ -266,17 +265,16 @@ def link_member(
     payload: MemberLinkRequest,
     staff: StaffContext = Depends(get_staff_context),
 ):
-    """CJ ONE 회원 연결 (FR-18). 등급 할인·적립이 즉시 반영된다."""
+    """CJ ONE 회원 연결 (FR-18). 등급 적립률이 즉시 반영된다(할인 없음)."""
     order = load_order(order_id, staff)
     ensure_pending(order)
 
     member = load_member_by_phone(payload.phone)
-    discount_rate, point_earn_rate = member_rates(member)
+    point_earn_rate = member_point_earn_rate(member)
 
     items = load_items(order_id)
     amounts = compute_amounts(
         items,
-        discount_rate=discount_rate,
         point_earn_rate=point_earn_rate,
         manual_discount_amount=money(order.get("manual_discount_amount") or 0),
     )
@@ -297,7 +295,7 @@ def unlink_member(
     order_id: int,
     staff: StaffContext = Depends(get_staff_context),
 ):
-    """회원 연결 해제 (FR-18). 할인·적립이 0으로 복귀한다."""
+    """회원 연결 해제 (FR-18). 적립이 0으로 복귀한다."""
     order = load_order(order_id, staff)
     ensure_pending(order)
 

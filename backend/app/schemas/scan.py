@@ -149,6 +149,9 @@ class ScanSessionDetail(BaseModel):
 
     scan_session_id: int
     order_id: int | None = None
+    image_url: str | None = None   # 실제로 추론한 이미지의 서명 URL. POS가 bbox를
+                                   # 이 사진 위에 겹쳐 그린다. DB에는 경로만 저장돼
+                                   # 있으므로 응답 시점에 새로 서명한다(TTL 10분).
     capture_type: CaptureType
     status: ScanSessionStatus
     overlap_warning: bool

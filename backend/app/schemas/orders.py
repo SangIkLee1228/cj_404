@@ -14,6 +14,10 @@ class Order(BaseModel):
         discount_amount = membership_discount_amount + manual_discount_amount
         total_amount   = gross_amount - discount_amount
 
+    membership_discount_amount는 새로 계산되는 주문에서 **항상 0**이다. CJ ONE 연동은
+    적립 전용이고 등급 할인은 제공하지 않는다(services/orders.py compute_amounts).
+    컬럼을 남겨둔 것은 이미 결제된 과거 주문의 장부를 보존하기 위해서다.
+
     scan_session은 ORDERS가 아니라 SCAN_SESSION.order_id로 연결된다(1:N).
     한 주문에 기본 촬영 + 추가 촬영 + 재촬영이 여러 건 붙을 수 있기 때문이다.
     """

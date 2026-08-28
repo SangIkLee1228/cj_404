@@ -14,16 +14,14 @@ export default function RecognitionScreen({
 }) {
   const { state, activeCart, totalCount, totalAmount, points, memberName } =
     pos;
-  const aiItems = activeCart.filter(
-    (item) => item.source === 'ai' || item.source === 'mixed'
-  );
 
   return (
     <main className={styles.recognitionMain}>
       <section className={styles.middle}>
         <TrayRecognition
           hasCaptured={state.capture.hasCaptured}
-          aiItems={aiItems}
+          isShooting={pos.isShooting}
+          scan={pos.scanResult}
         />
         <CartList
           items={activeCart}

@@ -53,7 +53,10 @@ def _flatten(row: dict) -> MemberLookupResponse:
         name=mask_name(row["name"]),
         grade_code=grade["grade_code"],
         grade_name=grade["grade_name"],
-        discount_rate=grade["discount_rate"],
+        # 등급 테이블에는 값이 남아 있지만(FAMILY 1% 등) 금액 계산에서 쓰지 않는다.
+        # CJ ONE 연동은 적립 전용이므로, 적용되지도 않을 할인율을 응답에 실어
+        # 클라이언트가 "1% 할인"을 표시하게 두면 안 된다. 실제 적용값인 0을 준다.
+        discount_rate=0.0,
         point_earn_rate=grade["point_earn_rate"],
         point_balance=row["point_balance"],
     )

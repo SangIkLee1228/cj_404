@@ -6,9 +6,13 @@
 용어: 화면에는 "촬영"으로 표기한다. "스캔"은 금어(API명세서 6장).
 """
 
+import time
+from datetime import UTC, datetime
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.core.config import get_settings
 from app.core.deps import StaffContext, get_staff_context
 from app.core.supabase_client import get_supabase
 from app.schemas.scan import (
@@ -18,7 +22,14 @@ from app.schemas.scan import (
     ScanSessionCreated,
     ScanSessionDetail,
 )
-from app.services.orders import Amounts
+from app.services.orders import Amounts, add_quantities, load_store_prices, recalculate
+from app.services.recognition import (
+    RecognitionError,
+    call_detect,
+    resolve_image_url,
+    sign,
+    to_detected_rows,
+)
 
 router = APIRouter(prefix="/scan-sessions", tags=["scan"])
 logger = structlog.get_logger("app.scan")
@@ -71,8 +82,28 @@ def _order_summary(order_id: int | None) -> dict | None:
     }
 
 
-def _session_detail(session: dict) -> dict:
-    """세션 + 인식 항목. GET /{id} 와 recognize 응답이 같은 모양이다."""
+def _signed_image(session: dict) -> str | None:
+    """세션 이미지의 서명 URL. 실패해도 None만 주고 넘어간다.
+
+    사진 한 장 못 띄우는 것과 세션 조회가 통째로 500이 되는 것은 심각도가 다르다.
+    """
+    path = session.get("image_url")
+    if not path:
+        return None
+    try:
+        return sign(path)
+    except Exception:  # noqa: BLE001
+        logger.warning("scan.sign_failed", path=path, exc_info=True)
+        return None
+
+
+def _session_detail(session: dict, image_url: str | None = None) -> dict:
+    """세션 + 인식 항목. GET /{id} 와 recognize 응답이 같은 모양이다.
+
+    image_url을 넘기면 그것을 그대로 쓴다 — recognize는 시연용 대체 이미지를
+    추론했을 수 있고, 그때는 session.image_url(NULL)이 아니라 실제로 추론한
+    사진을 화면에 띄워야 bbox 위치가 맞는다.
+    """
     supabase = get_supabase()
     detected = (
         supabase.table("detected_item")
@@ -110,6 +141,7 @@ def _session_detail(session: dict) -> dict:
     return {
         "scan_session_id": session["scan_session_id"],
         "order_id": session["order_id"],
+        "image_url": image_url if image_url is not None else _signed_image(session),
         "capture_type": session["capture_type"],
         "status": session["status"],
         "overlap_warning": session["overlap_warning"],
@@ -190,25 +222,110 @@ def get_scan_session(scan_session_id: int, staff: StaffContext = Depends(get_sta
     return _session_detail(_load_session(scan_session_id, staff))
 
 
-# 186번째 줄
+def _known_product_ids(detections: list[dict]) -> set[int]:
+    """모델이 준 id 중 실제로 우리 product 테이블에 있는 것만 추린다.
+
+    모델이 상품 매핑까지 끝내서 보내주지만, 상품이 지워지거나 모델 쪽 매핑표가
+    낡으면 없는 id가 섞여 들어온다. 그대로 넣으면 FK 위반으로 인식 전체가 죽으므로
+    미리 걸러 명세서 4.4대로 product_id=NULL + __UNMATCHED__ 로 떨어뜨린다.
+    """
+    ids = {d["id"] for d in detections if isinstance(d.get("id"), int)}
+    if not ids:
+        return set()
+    rows = (
+        get_supabase()
+        .table("product")
+        .select("product_id")
+        .in_("product_id", sorted(ids))
+        .execute()
+    ).data
+    return {row["product_id"] for row in rows}
+
+
+def _apply_to_order(order_id: int, rows: list[dict], store_id: int) -> None:
+    """인식 결과를 주문 항목(AI_DETECTED)에 반영한다.
+
+    탐지 1건 = 1행이지만 주문 항목은 상품별로 합산한다 - 꽈배기 3개가 장바구니에
+    3줄로 뜨면 직원이 수량을 고칠 수 없다. 명세서 4.4 "동일 product_id는 기존 항목에 합산".
+
+    Supabase 왕복은 상품 수와 무관하게 3회로 고정이다(가격 조회 / 기존 항목 조회 /
+    일괄 INSERT). 예전에는 상품마다 가격 조회 + 항목 조회 + 쓰기로 3회씩 돌아서
+    6종이면 18회, 1.4초가 걸렸다 - 왕복 1회가 60~90ms인 원격 DB라 그대로 체감된다.
+    """
+    grouped: dict[int, dict] = {}
+    for row in rows:
+        product_id = row["product_id"]
+        if product_id is None:
+            continue    # 매칭 실패 건은 detected_item에만 남기고 주문에는 안 넣는다
+        entry = grouped.setdefault(product_id, {"quantity": 0, "needs_review": False})
+        entry["quantity"] += row["quantity"]
+        entry["needs_review"] |= row["is_below_threshold"]
+
+    if not grouped:
+        return
+
+    prices = load_store_prices(list(grouped), store_id)
+
+    items = []
+    for product_id, entry in grouped.items():
+        price = prices.get(product_id)
+        if price is None:
+            # 이 매장에서 안 파는 상품. 인식 기록은 남기되 금액에는 넣지 않는다.
+            logger.warning("scan.product_not_sold", product_id=product_id)
+            continue
+        items.append(
+            {
+                "product_id": product_id,
+                "quantity": entry["quantity"],
+                "unit_price": price,
+                "needs_review": entry["needs_review"],
+            }
+        )
+
+    for product_id in add_quantities(order_id, items, "AI_DETECTED"):
+        # 수량 상한(99) 초과. 한 상품만 못 담고 나머지는 정상 반영된다.
+        logger.warning("scan.item_limit", product_id=product_id)
+
+
+def _fail(scan_session_id: int, reason: str, image_url: str | None) -> dict:
+    """실패를 세션에 기록하고 상세를 돌려준다.
+
+    HTTP 오류로 바꾸지 않는 이유: 명세서 4.4가 "실패 시 status=FAILED +
+    failure_reason을 HTTP 200으로. 오류가 아니라 인식 결과다"라고 정하고 있다.
+    POS는 이걸 받아 "직접 추가" 안내로 넘어간다.
+    """
+    updated = (
+        get_supabase()
+        .table("scan_session")
+        .update(
+            {
+                "status": "FAILED",
+                "failure_reason": reason,
+                "completed_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        .eq("scan_session_id", scan_session_id)
+        .execute()
+    ).data[0]
+    logger.warning("scan.recognize_failed", failure_reason=reason)
+    return _session_detail(updated, image_url=image_url)
+
+
 @router.post(
     "/{scan_session_id}/recognize",
     response_model=ScanSessionDetail,
-    responses={501: {"description": "AI 추론 서버 미연결 (의도된 stub)"}},
+    responses={501: {"description": "MODEL_API_URL 미설정"}},
 )
 def recognize_scan_session(
     scan_session_id: int, staff: StaffContext = Depends(get_staff_context)
 ):
-    """AI 인식 실행 (FR-02, 아직 stub).
+    """AI 인식 실행 (FR-02).
 
-    의도한 아키텍처: 이 프로세스에서 모델을 로드하지 않고, 별도 GPU 인스턴스
-    (backend/Dockerfile.gpu 참고)에 scan_session.image_url을 넘겨 추론을 위임한 뒤
-    결과를 detected_item에 적재하고 order_item(AI_DETECTED)에 반영한다.
+    이 프로세스는 모델을 로드하지 않는다. scan_session의 이미지를 서명 URL로 만들어
+    MODEL_API_URL(팀원 Mac + ngrok)에 넘기고, 돌아온 탐지 결과를 detected_item에
+    적재한 뒤 order_item(AI_DETECTED)에 합산한다.
 
-    연결 후 해야 할 것:
-      - status를 RECOGNIZING -> COMPLETED / FAILED 로 전이
-      - recognition_ms 기록 (NFR-01, 3초 이내 목표)
-      - 실패는 HTTP 200 + status='FAILED' + failure_reason (오류가 아니라 인식 결과다)
+    상태 전이: CAPTURED -> RECOGNIZING -> COMPLETED / FAILED
     """
     session = _load_session(scan_session_id, staff)
 
@@ -221,9 +338,74 @@ def recognize_scan_session(
 
     structlog.contextvars.bind_contextvars(scan_session_id=scan_session_id)
     logger.info("scan.recognize_requested")
-    raise HTTPException(
-        status.HTTP_501_NOT_IMPLEMENTED, "AI 인식 서버가 아직 연결되지 않았습니다"
+
+    if not get_settings().model_api_url:
+        raise HTTPException(
+            status.HTTP_501_NOT_IMPLEMENTED, "AI 인식 서버가 아직 연결되지 않았습니다"
+        )
+
+    supabase = get_supabase()
+    supabase.table("scan_session").update({"status": "RECOGNIZING"}).eq(
+        "scan_session_id", scan_session_id
+    ).execute()
+
+    # 모델 호출 구간만 계측한다. NFR-01(3초 이내)이 재는 대상이 이 왕복이기 때문이다.
+    image_url: str | None = None
+    started = time.perf_counter()
+    try:
+        image_url = resolve_image_url(session)
+        data = call_detect(image_url)
+    except RecognitionError as exc:
+        logger.warning("scan.model_error", reason=exc.reason, detail=exc.detail)
+        return _fail(scan_session_id, exc.reason, image_url)
+    recognition_ms = int((time.perf_counter() - started) * 1000)
+
+    detections = data.get("detections") or []
+    rows = to_detected_rows(scan_session_id, data, _known_product_ids(detections))
+    if rows:
+        supabase.table("detected_item").insert(rows).execute()
+
+    if session["order_id"] is not None:
+        _apply_to_order(session["order_id"], rows, staff.store_id)
+        # 항목이 바뀌었으니 주문 금액 6종을 다시 쓴다. 이걸 빼먹으면 장바구니에는
+        # 빵이 담겼는데 결제 금액이 0원인 주문이 남는다.
+        order = (
+            supabase.table("orders")
+            .select("*")
+            .eq("order_id", session["order_id"])
+            .limit(1)
+            .execute()
+        ).data
+        if order:
+            recalculate(order[0])
+
+    # status 조건을 거는 이유: 추론 중에 직원이 취소(FR-08)를 눌렀을 수 있다.
+    # 조건이 없으면 이미 FAILED로 넘어간 세션을 COMPLETED로 덮어써서, 화면에서
+    # 취소한 촬영이 결과로 되살아난다.
+    updated = (
+        supabase.table("scan_session")
+        .update(
+            {
+                "status": "COMPLETED",
+                "recognition_ms": recognition_ms,
+                "completed_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        .eq("scan_session_id", scan_session_id)
+        .eq("status", "RECOGNIZING")
+        .execute()
+    ).data
+
+    if not updated:
+        logger.info("scan.recognize_superseded")   # 취소가 이겼다. 그 상태를 존중한다.
+        return _session_detail(_load_session(scan_session_id, staff), image_url=image_url)
+
+    logger.info(
+        "scan.recognize_completed",
+        recognition_ms=recognition_ms,
+        detected_count=len(rows),
     )
+    return _session_detail(updated[0], image_url=image_url)
 
 
 @router.post("/{scan_session_id}/cancel", response_model=ScanCancelResponse)

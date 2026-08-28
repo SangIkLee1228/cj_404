@@ -29,6 +29,25 @@ class Settings(BaseSettings):
     # 거절시키는 헤더까지 딸려 들어간다. 스위치 하나가 두 가지를 켜면 안 된다.
     mock_payment_failure: bool = False
 
+    # ── AI 추론 서버 (팀원 Mac + ngrok 터널) ──────────────────────────────
+    # 비어 있으면 recognize는 기존처럼 501을 준다. 값이 있어야 실제 추론을 건다.
+    model_api_url: str = ""
+    model_api_timeout: float = 30.0   # 명세서 4.4 "서버 타임아웃 30초"
+
+    # 이 값 미만이면 is_below_threshold / needs_review = true. 0~100 스케일이다
+    # (모델은 0~1로 주므로 recognition.py가 100을 곱한 뒤 비교한다).
+    ai_confidence_threshold: float = 70.0
+
+    # 시연용: 카메라 없이 "촬영"했을 때(image_url이 NULL) 대신 추론할 이미지.
+    # 버킷을 따로 두는 이유는 테스트 이미지가 supabase_storage_bucket이 아닌
+    # 별도 버킷에 올라가 있기 때문이다. 쉼표로 여러 장을 주면 세션마다 돌아가며 쓴다.
+    demo_scan_image_bucket: str = ""
+    demo_scan_image_paths: str = ""
+
+    @property
+    def demo_scan_image_list(self) -> list[str]:
+        return [p.strip() for p in self.demo_scan_image_paths.split(",") if p.strip()]
+
     # AUTH_DISABLED=true 일 때 서버가 사용하는 시드 고정값 (DB 설계서 v1.4 · 7장)
     dev_store_id: int = 1
     dev_staff_id: int = 1

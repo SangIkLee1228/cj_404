@@ -61,7 +61,7 @@ def _floor_rate(amount: int, rate: Decimal | float | str) -> int:
 #            바꾸고 싶으면 compute_amounts()를 다시 부르라고 강제하는 장치.
 class Amounts:
     gross_amount: int                 # Σ(수량 × 단가)
-    membership_discount_amount: int   # floor(gross × 등급할인율)
+    membership_discount_amount: int   # 항상 0 — 등급 할인 없음 (compute_amounts 참고)
     manual_discount_amount: int       # 직원 수동 할인 (FR-08)
     discount_amount: int              # 위 둘의 합
     total_amount: int                 # gross - discount
@@ -90,25 +90,33 @@ def line_subtotal(quantity: int, unit_price: int) -> int:
 def compute_amounts(
     items: list[dict],
     *,
-    discount_rate: Decimal | float | str = Decimal("0"),
     point_earn_rate: Decimal | float | str = Decimal("0"),
     manual_discount_amount: int = 0,
 ) -> Amounts:
     """항목 목록에서 주문 금액 전부를 다시 계산한다 (명세서 1.5).
 
         gross_amount               = Σ(quantity × unit_price)
-        membership_discount_amount = floor(gross × grade.discount_rate)
-        discount_amount            = membership + manual
+        membership_discount_amount = 0        ← 항상 0. 아래 설명 참고
+        discount_amount            = manual
         total_amount               = gross − discount
         point_earned               = floor(total × grade.point_earn_rate)
+
+    **등급 할인은 적용하지 않는다.** CJ ONE 연동은 포인트 적립 기능뿐이며 할인은
+    제공하지 않는다. membership_grade.discount_rate에는 여전히 등급별 값(FAMILY 1%,
+    MANIA 2%, VIP 3%)이 들어 있지만 금액 계산에서는 읽지 않는다 — 등급 메타데이터일
+    뿐이다. 그래서 discount_rate를 **인자로도 받지 않는다**: 기본값 0짜리 파라미터로
+    남겨두면 호출부 한 곳이 값을 넘기는 순간 할인이 되살아나기 때문이다.
+
+    membership_discount_amount 필드와 DB 컬럼은 남겨둔다. 이미 결제된 과거 주문에
+    값이 들어 있고(그때의 장부는 그대로 두어야 한다), 대시보드 매출 화면이 이 컬럼을
+    읽기 때문이다. 새로 계산되는 주문에서는 항상 0이다.
 
     items는 quantity·unit_price 키만 있으면 되는 dict 목록이다. Supabase 응답 행을
     그대로 넘겨도 되고 테스트에서 손으로 만든 dict를 넘겨도 된다. 특정 타입에
     묶지 않으려고 일부러 dict로 받는다.
 
-    키워드 전용(*) 으로 받는 이유: discount_rate와 point_earn_rate는 둘 다 Decimal
-    비율이라 위치 인자로 두면 순서가 바뀌어도 조용히 통과한다. 호출부에서 이름을
-    쓰도록 강제한다.
+    키워드 전용(*) 으로 받는 이유: 비율과 금액을 위치 인자로 두면 순서가 바뀌어도
+    조용히 통과한다. 호출부에서 이름을 쓰도록 강제한다.
     """
     # 증분(gross += ...)이 아니라 매번 전체 SUM이다. PostgREST에 트랜잭션이 없어
     # 항목 쓰기와 금액 쓰기 사이에서 실패할 수 있는데, 전체 재계산이면 다음 요청이
@@ -116,7 +124,6 @@ def compute_amounts(
     gross = sum(int(item["quantity"]) * money(item["unit_price"])
                 for item in items)
 
-    membership = _floor_rate(gross, discount_rate)
     manual = manual_discount_amount
 
     # 항목이 줄어 gross가 기존 수동 할인보다 작아질 수 있다.
@@ -125,28 +132,24 @@ def compute_amounts(
     # 없어지므로 할인을 gross에 맞춰 깎고 경고 로그를 남긴다.
     # 직원이 금액을 직접 넣는 POST /discount 쪽은 라우트가 미리 검사해 400을 준다 -
     # 그쪽은 입력 오류이지 여기처럼 파생된 결과가 아니기 때문이다.
-    if membership + manual > gross:
-        clamped = max(0, gross - membership)
+    if manual > gross:
         logger.warning(
             "order.manual_discount_clamped",
             gross_amount=gross,
-            membership_discount_amount=membership,
             requested_manual=manual,
-            applied_manual=clamped,
+            applied_manual=gross,
         )
-        manual = clamped
+        manual = gross
 
-    discount = membership + manual
-    total = gross - discount
+    total = gross - manual
 
     return Amounts(
         gross_amount=gross,
-        membership_discount_amount=membership,
+        membership_discount_amount=0,   # 등급 할인 없음
         manual_discount_amount=manual,
-        discount_amount=discount,
+        discount_amount=manual,
         total_amount=total,
-        # 적립은 할인 후 실제 결제액 기준이다. gross 기준으로 잡으면 할인받고
-        # 적립까지 더 받는 구조가 되어 명세서 1.5와 어긋난다.
+        # 적립은 실제 결제액 기준이다.
         point_earned=_floor_rate(total, point_earn_rate),
     )
 
@@ -161,12 +164,10 @@ def recalculate(order: dict) -> tuple[dict, list[dict]]:
     order_id = order["order_id"]
 
     items = load_items(order_id)
-    discount_rate, point_earn_rate = load_grade_rates(
-        order.get("applied_grade_id"))
+    point_earn_rate = load_point_earn_rate(order.get("applied_grade_id"))
 
     amounts = compute_amounts(
         items,
-        discount_rate=discount_rate,
         point_earn_rate=point_earn_rate,
         manual_discount_amount=money(order.get("manual_discount_amount") or 0),
     )
@@ -208,15 +209,18 @@ def load_items(order_id: int) -> list[dict]:
     ).data
 
 
-def load_grade_rates(applied_grade_id: int | None) -> tuple[Decimal, Decimal]:
-    '''(할인율, 적립률). 회원 미연결이면 (0,0)'''
+def load_point_earn_rate(applied_grade_id: int | None) -> Decimal:
+    '''등급별 적립률. 회원 미연결이면 0.
+
+    할인율은 읽지 않는다 — CJ ONE 연동은 적립 전용이다(compute_amounts 참고).
+    '''
     if applied_grade_id is None:
-        return Decimal("0"), Decimal("0")
+        return Decimal("0")
 
     rows = (
         get_supabase()
         .table("membership_grade")
-        .select("discount_rate, point_earn_rate")
+        .select("point_earn_rate")
         .eq("grade_id", applied_grade_id)
         .limit(1)
         .execute()
@@ -225,12 +229,9 @@ def load_grade_rates(applied_grade_id: int | None) -> tuple[Decimal, Decimal]:
     if not rows:
         logger.warning("order.grade_not_found",
                        applied_grade_id=applied_grade_id)
-        return Decimal("0"), Decimal("0")
+        return Decimal("0")
 
-    return (
-        Decimal(str(rows[0]["discount_rate"])),
-        Decimal(str(rows[0]["point_earn_rate"])),
-    )
+    return Decimal(str(rows[0]["point_earn_rate"]))
 
 
 ORDER_STATUS_LABEL = {
@@ -486,6 +487,125 @@ def add_quantity(order_id: int, product_id: int, quantity: int, unit_price: int,
     ).eq("order_item_id", existing["order_item_id"]).execute()
 
 
+def load_store_prices(product_ids: list[int], store_id: int) -> dict[int, int]:
+    """여러 상품의 현재 판매가를 **한 번의 쿼리로** 읽는다. {product_id: price}.
+
+    load_store_price()의 배치판이다. 없거나 판매 중지된 상품은 결과에서 빠지며,
+    404를 올리지 않는다 — 호출부(AI 인식)가 "이 상품만 건너뛰고 나머지는 담는다"를
+    선택할 수 있어야 하기 때문이다. 단건 함수는 직원이 명시적으로 담는 경로라
+    404가 맞고, 여기는 아니다.
+
+    Supabase는 원격이라 왕복 1회가 60~90ms다. 상품마다 부르면 트레이에 6종만
+    올라와도 그것만으로 0.4초를 쓴다.
+    """
+    if not product_ids:
+        return {}
+
+    rows = (
+        get_supabase()
+        .table("store_product")
+        .select("product_id, price, is_active, product!inner(is_active)")
+        .eq("store_id", store_id)
+        .in_("product_id", sorted(set(product_ids)))
+        .execute()
+    ).data
+
+    prices: dict[int, int] = {}
+    for row in rows:
+        product = _embedded(row.get("product")) or {}
+        if not row["is_active"] or not product.get("is_active", True):
+            continue
+        prices[row["product_id"]] = money(row["price"])
+    return prices
+
+
+def add_quantities(order_id: int, items: list[dict], source_type: str) -> list[int]:
+    """여러 상품을 한 번에 담는다. add_quantity()의 배치판. 건너뛴 product_id를 돌려준다.
+
+    items 원소: {"product_id", "quantity", "unit_price", "needs_review"}
+
+    합산 규칙은 단건과 같다 — 같은 product_id가 이미 있으면 수량을 더하고 단가는
+    기존 행의 스냅샷을 유지하며 source_type을 넘어온 값으로 승격한다.
+
+    수량 상한(99)을 넘는 상품은 **예외를 올리지 않고 건너뛴다.** 단건 add_quantity는
+    400을 내는데, 그쪽은 직원이 직접 누른 요청이라 알려줘야 하기 때문이다. 여기는
+    트레이 한 판을 담는 중이라, 한 상품 때문에 나머지 다섯 종을 통째로 버리면
+    직원이 손으로 다시 담아야 한다. 건너뛴 목록은 호출부가 로그로 남긴다.
+    """
+    if not items:
+        return []
+
+    supabase = get_supabase()
+    existing = {
+        row["product_id"]: row
+        for row in (
+            supabase.table("order_item")
+            .select("order_item_id, product_id, quantity, unit_price, needs_review")
+            .eq("order_id", order_id)
+            .in_("product_id", [i["product_id"] for i in items])
+            .execute()
+        ).data
+    }
+
+    inserts: list[dict] = []
+    merges: list[tuple[dict, dict]] = []   # (기존 행, 새 값)
+    skipped: list[int] = []
+
+    for item in items:
+        product_id = item["product_id"]
+        quantity = item["quantity"]
+        current = existing.get(product_id)
+
+        if current is None:
+            price = money(item["unit_price"])
+            inserts.append(
+                {
+                    "order_id": order_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "unit_price": price,
+                    "subtotal": line_subtotal(quantity, price),
+                    "source_type": source_type,
+                    # 별도 UPDATE로 찍던 값이다. INSERT에 함께 실어 왕복을 없앤다.
+                    "needs_review": bool(item.get("needs_review")),
+                }
+            )
+            continue
+
+        if current["quantity"] + quantity > MAX_ITEM_QUANTITY:
+            skipped.append(product_id)
+            continue
+
+        merged = current["quantity"] + quantity
+        price = money(current["unit_price"])   # 기존 행의 스냅샷 가격을 유지한다.
+        merges.append(
+            (
+                current,
+                {
+                    "quantity": merged,
+                    "subtotal": line_subtotal(merged, price),
+                    "source_type": source_type,
+                    # 한 번 "확인 필요"가 붙은 행은 유지한다 - 추가 촬영에서 신뢰도가
+                    # 높게 나왔다고 앞선 의심을 지우면 직원이 검토를 놓친다.
+                    "needs_review": bool(current.get("needs_review"))
+                    or bool(item.get("needs_review")),
+                },
+            )
+        )
+
+    if inserts:
+        supabase.table("order_item").insert(inserts).execute()
+
+    # 행마다 값이 달라 한 번에 못 묶는다. 다만 이미 담긴 상품을 다시 인식한
+    # 경우에만 생기므로, 기본 촬영에서는 보통 0건이다.
+    for current, changes in merges:
+        supabase.table("order_item").update(changes).eq(
+            "order_item_id", current["order_item_id"]
+        ).execute()
+
+    return skipped
+
+
 def set_item_quantity(item: dict, quantity: int) -> None:
     '''
     수량 변경 (FR-04). unit_price는 담을 때의 스냅샷을 그대로 쓴다.
@@ -572,15 +692,12 @@ def load_member_by_phone(phone: str) -> dict:
     return rows[0]
 
 
-def member_rates(member: dict | None) -> tuple[Decimal, Decimal]:
-    """회원 행에서 (등급 할인율, 적립률). 비회원이면 (0, 0)."""
+def member_point_earn_rate(member: dict | None) -> Decimal:
+    """회원 행에서 등급 적립률. 비회원이면 0. 할인율은 쓰지 않는다."""
     if member is None:
-        return Decimal("0"), Decimal("0")
+        return Decimal("0")
     grade = _embedded(member.get("membership_grade")) or {}
-    return (
-        Decimal(str(grade.get("discount_rate", 0))),
-        Decimal(str(grade.get("point_earn_rate", 0))),
-    )
+    return Decimal(str(grade.get("point_earn_rate", 0)))
 
 
 def save_member_link(order: dict, member: dict | None, amounts: Amounts) -> dict:
