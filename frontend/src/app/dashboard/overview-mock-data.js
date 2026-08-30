@@ -152,6 +152,8 @@ const THIRTY_D_SALES_POINTS = [...PREV_23_DAYS_POINTS, ...SEVEN_D_SALES_POINTS];
 
 // ---- 최근 주문(현재 스냅샷, 세 기간이 공유) ----
 //
+// 실제 API와 같이 paid_at(결제 시각) 최신순으로 둔다 — 화면의 "시간" 열도
+// ordered_at이 아니라 이 값을 찍는다.
 // 오늘 발생한 주문은 7D·30D 조회에도 항상 포함되므로, "최근 판매 6건"은
 // 조회 기간과 무관하게 항상 같은 결과여야 한다 — TODAY/7D/30D가 각자
 // 다른 주문 집합을 반환하면 실제 API 의미와 어긋난다. 세 응답 모두 이
@@ -161,6 +163,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9006,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 19, 20),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 19, 22),
     item_summary: '소금빵, 우유 식빵 외 1',
     item_count: 4,
     total_amount: 13800,
@@ -168,6 +171,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9005,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 18, 42),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 18, 45),
     item_summary: '소금빵, 우유 식빵',
     item_count: 3,
     total_amount: 11200,
@@ -175,6 +179,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9004,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 17, 10),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 17, 12),
     item_summary: '초코 크루아상, 에그타르트 외 1',
     item_count: 4,
     total_amount: 15600,
@@ -182,6 +187,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9003,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 15, 5),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 15, 7),
     item_summary: '단팥빵',
     item_count: 2,
     total_amount: 5000,
@@ -189,6 +195,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9002,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 13, 20),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 13, 23),
     item_summary: '우유 식빵, 팥 도넛',
     item_count: 3,
     total_amount: 10500,
@@ -196,6 +203,7 @@ const CURRENT_RECENT_ORDERS = [
   {
     order_id: 9001,
     ordered_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 10, 15),
+    paid_at: kstWallTimeToUtcIso(OVERVIEW_MOCK_REFERENCE_DATE, 10, 16),
     item_summary: '에그타르트',
     item_count: 1,
     total_amount: 2800,

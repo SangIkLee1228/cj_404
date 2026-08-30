@@ -195,18 +195,22 @@ def get_overview(
         share_pct=share_pct(others_qty, item_qty),
     )
 
-    # recent_orders: 최근 6건
+    # recent_orders: 최근 6건. 조회·집계와 같은 paid_at(결제 시각) 기준으로
+    # 정렬하고 화면도 그 값을 찍는다 - orders를 paid_at으로 필터해 놓고
+    # ordered_at으로 정렬하면 결제가 늦어진 주문이 섞였을 때 "최근 6건"이
+    # 실제 최근 6건이 아니게 된다.
     recent_orders = [
         RecentOrder(
             order_id=o["order_id"],
             ordered_at=o["ordered_at"],
+            paid_at=o["paid_at"],
             item_summary=item_summary(
                 [it["product"]["product_name"] for it in items_by_order.get(o["order_id"], [])]
             ),
             item_count=sum(it["quantity"] for it in items_by_order.get(o["order_id"], [])),
             total_amount=int(round(float(o["total_amount"]))),
         )
-        for o in sorted(orders, key=lambda o: o["ordered_at"], reverse=True)[:6]
+        for o in sorted(orders, key=lambda o: o["paid_at"], reverse=True)[:6]
     ]
 
     return DashboardOverviewResponse(

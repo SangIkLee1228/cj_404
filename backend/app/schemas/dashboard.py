@@ -55,8 +55,14 @@ class TopProductsOthers(BaseModel):
 
 
 class RecentOrder(BaseModel):
+    """최근 판매 표의 한 행. 화면에 찍는 시각은 paid_at(결제 시각)이다 -
+    KPI·시간대별 매출 차트와 판매 내역(S-07) 화면이 모두 paid_at 기준이라
+    ordered_at을 쓰면 같은 주문이 화면마다 다른 시각으로 보인다. ordered_at은
+    기존 계약 호환을 위해 그대로 함께 내려준다."""
+
     order_id: int
     ordered_at: datetime
+    paid_at: datetime | None = None
     item_summary: str
     item_count: int
     total_amount: int

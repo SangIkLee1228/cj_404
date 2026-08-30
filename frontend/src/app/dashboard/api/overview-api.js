@@ -62,9 +62,13 @@ const topProductsOthersSchema = z.object({
   share_pct: z.number().default(0),
 });
 
+// backend/app/schemas/dashboard.py::RecentOrder. 화면에 찍는 시각은
+// paid_at(결제 시각)이고 ordered_at은 계약 호환을 위해 함께 내려오는 값이다.
+// paid_at은 서버 기본값 null이 있는 optional 필드라 nullable+optional로 둔다.
 const recentOrderSchema = z.object({
   order_id: z.number().int(),
   ordered_at: z.string().datetime({ offset: true }),
+  paid_at: z.string().datetime({ offset: true }).nullable().default(null),
   item_summary: z.string(),
   item_count: z.number().int(),
   total_amount: z.number().int(),

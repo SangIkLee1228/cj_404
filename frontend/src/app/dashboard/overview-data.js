@@ -280,8 +280,9 @@ export function formatOverviewTimeLabel(isoString, timezone) {
 const MAX_RECENT_ORDERS = 6;
 
 // response.recent_orders(실제 API 응답과 동일한 order_id/ordered_at/
-// item_summary/item_count/total_amount shape)를 최근 판매 표 view model로
-// 변환한다. 최대 6건까지만 쓰고, API가 준 순서를 다시 정렬하지 않는다 —
+// paid_at/item_summary/item_count/total_amount shape)를 최근 판매 표 view
+// model로 변환한다. 최대 6건까지만 쓰고, API가 준 순서(paid_at 최신순)를
+// 다시 정렬하지 않는다 —
 // 최대 개수 제한은 이 함수가 담당하므로 화면에서 다시 slice/sort하지
 // 않아도 된다. response.timezone이 없거나 문자열이 아니면(비정상 응답)
 // 브라우저 로컬 timezone에 기대는 대신 API 기본 timezone
@@ -298,6 +299,11 @@ export function mapDashboardOverviewToRecentOrders(response) {
       : 'Asia/Seoul';
 
   return recentOrders.slice(0, MAX_RECENT_ORDERS).map((order) => {
+    // "시간" 열은 결제 시각(paid_at)을 찍는다 - KPI·시간대별 매출 차트와
+    // 판매 내역(S-07) 화면이 모두 paid_at 기준이라, 여기서만 ordered_at을
+    // 쓰면 같은 주문이 화면마다 다른 시각으로 보인다. paid_at이 없는
+    // 비정상 응답에서만 ordered_at으로 물러선다(판매 내역 화면과 같은 규칙).
+    const paidOrOrderedAt = order?.paid_at ?? order?.ordered_at ?? null;
     const itemCount = Number.isFinite(order?.item_count) ? order.item_count : 0;
     const totalAmount = Number.isFinite(order?.total_amount)
       ? order.total_amount
@@ -305,8 +311,8 @@ export function mapDashboardOverviewToRecentOrders(response) {
 
     return {
       orderId: order?.order_id ?? null,
-      timeLabel: order?.ordered_at
-        ? formatOverviewTimeLabel(order.ordered_at, timezone)
+      timeLabel: paidOrOrderedAt
+        ? formatOverviewTimeLabel(paidOrOrderedAt, timezone)
         : '',
       itemSummary: order?.item_summary ?? '',
       itemCount,
